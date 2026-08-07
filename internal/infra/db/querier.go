@@ -6,10 +6,13 @@ package db
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 type Querier interface {
 	CreateCountry(ctx context.Context, arg CreateCountryParams) (Country, error)
+	CreateTransfer(ctx context.Context, arg CreateTransferParams) (uuid.UUID, error)
 	DeleteCountry(ctx context.Context, id int64) error
 	GetCountryByID(ctx context.Context, id int64) (Country, error)
 	GetTransferByReference(ctx context.Context, reference string) (Transfer, error)

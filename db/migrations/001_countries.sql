@@ -28,6 +28,16 @@ CREATE TABLE routes(
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     deleted_at TIMESTAMPTZ
 );
+CREATE TABLE payment_channels (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL UNIQUE,
+    channel_type receiving_methods NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    country_id BIGSERIAL NOT NULL REFERENCES countries(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deleted_at TIMESTAMPTZ
+);
 -- +goose Down
 DROP TABLE countries;
 DROP TABLE routes;

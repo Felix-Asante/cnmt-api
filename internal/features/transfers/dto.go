@@ -20,7 +20,7 @@ type recipientDTO struct {
 	RecipientName  string `json:"recipient_name" validate:"required,min=2,max=100"`
     RecipientPhone *string `json:"recipient_phone,omitempty" validate:"omitempty,required_if=ReceivingMethod MOBILE_MONEY"` // only for mobile money
 
-    ReceivingMethod db.ReceivingMethod `json:"receiving_method" validate:"required,oneof=BANK MOBILE_MONEY"`
+    ReceivingMethod db.ReceivingMethods `json:"receiving_method" validate:"required,oneof=BANK MOBILE_MONEY"`
 
     ReceivingNetworkID *int `json:"receiving_network_id,omitempty" validate:"omitempty,required_if=ReceivingMethod MOBILE_MONEY"` // only for mobile money
 

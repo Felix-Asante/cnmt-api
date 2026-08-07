@@ -55,46 +55,46 @@ func (ns NullFeeType) Value() (driver.Value, error) {
 	return string(ns.FeeType), nil
 }
 
-type ReceivingMethod string
+type ReceivingMethods string
 
 const (
-	ReceivingMethodBANK        ReceivingMethod = "BANK"
-	ReceivingMethodMOBILEMONEY ReceivingMethod = "MOBILE_MONEY"
+	ReceivingMethodsBANK        ReceivingMethods = "BANK"
+	ReceivingMethodsMOBILEMONEY ReceivingMethods = "MOBILE_MONEY"
 )
 
-func (e *ReceivingMethod) Scan(src interface{}) error {
+func (e *ReceivingMethods) Scan(src interface{}) error {
 	switch s := src.(type) {
 	case []byte:
-		*e = ReceivingMethod(s)
+		*e = ReceivingMethods(s)
 	case string:
-		*e = ReceivingMethod(s)
+		*e = ReceivingMethods(s)
 	default:
-		return fmt.Errorf("unsupported scan type for ReceivingMethod: %T", src)
+		return fmt.Errorf("unsupported scan type for ReceivingMethods: %T", src)
 	}
 	return nil
 }
 
-type NullReceivingMethod struct {
-	ReceivingMethod ReceivingMethod
-	Valid           bool // Valid is true if ReceivingMethod is not NULL
+type NullReceivingMethods struct {
+	ReceivingMethods ReceivingMethods
+	Valid            bool // Valid is true if ReceivingMethods is not NULL
 }
 
 // Scan implements the Scanner interface.
-func (ns *NullReceivingMethod) Scan(value interface{}) error {
+func (ns *NullReceivingMethods) Scan(value interface{}) error {
 	if value == nil {
-		ns.ReceivingMethod, ns.Valid = "", false
+		ns.ReceivingMethods, ns.Valid = "", false
 		return nil
 	}
 	ns.Valid = true
-	return ns.ReceivingMethod.Scan(value)
+	return ns.ReceivingMethods.Scan(value)
 }
 
 // Value implements the driver Valuer interface.
-func (ns NullReceivingMethod) Value() (driver.Value, error) {
+func (ns NullReceivingMethods) Value() (driver.Value, error) {
 	if !ns.Valid {
 		return nil, nil
 	}
-	return string(ns.ReceivingMethod), nil
+	return string(ns.ReceivingMethods), nil
 }
 
 type TransferStatus string
@@ -158,6 +158,17 @@ type Country struct {
 	DeletedAt      pgtype.Timestamptz
 }
 
+type PaymentChannel struct {
+	ID          uuid.UUID
+	Name        string
+	ChannelType ReceivingMethods
+	IsActive    bool
+	CountryID   int64
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   pgtype.Timestamptz
+}
+
 type Route struct {
 	ID                   uuid.UUID
 	SourceCountryID      int64
@@ -167,34 +178,32 @@ type Route struct {
 	Fee                  pgtype.Numeric
 	FeeType              FeeType
 	EstimatedMinutes     *int32
+	MaxTransferAmount    pgtype.Numeric
+	MinTransferAmount    pgtype.Numeric
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 	DeletedAt            pgtype.Timestamptz
 }
 
 type Transfer struct {
-	ID                  uuid.UUID
-	Reference           string
-	RouteID             uuid.UUID
-	Status              TransferStatus
-	SenderName          string
-	SenderPhone         string
-	RecipientName       string
-	RecipientPhone      string
-	ReceivingMethod     ReceivingMethod
-	NetworkName         string
-	BankName            *string
-	RecipientAccount    string
-	SendAmount          pgtype.Numeric
-	ReceiveAmount       pgtype.Numeric
-	SourceCurrency      string
-	DestinationCurrency string
-	ExchangeRate        pgtype.Numeric
-	Fee                 pgtype.Numeric
-	PaymentChannel      string
-	PaymentProofKey     *string
-	Notes               *string
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
-	DeletedAt           pgtype.Timestamptz
+	ID                         uuid.UUID
+	Reference                  string
+	RouteID                    uuid.UUID
+	Status                     TransferStatus
+	SenderPhone                string
+	ReceivingAccountName       string
+	ReceivingMobileMoneyNumber *string
+	ReceivingMethod            ReceivingMethods
+	ReceivingMoneyNetworkID    pgtype.UUID
+	ReceivingBankID            pgtype.UUID
+	ReceivingBankAccount       *string
+	PaymentProofKey            *string
+	ExchangeRate               pgtype.Numeric
+	Fee                        pgtype.Numeric
+	AmountSent                 pgtype.Numeric
+	AmountReceived             pgtype.Numeric
+	Notes                      *string
+	CreatedAt                  time.Time
+	UpdatedAt                  time.Time
+	DeletedAt                  pgtype.Timestamptz
 }

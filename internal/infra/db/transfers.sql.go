@@ -7,10 +7,96 @@ package db
 
 import (
 	"context"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createTransfer = `-- name: CreateTransfer :one
+INSERT INTO transfers (
+        reference,
+        route_id,
+        status,
+        sender_phone,
+        receiving_account_name,
+        receiving_mobile_money_number,
+        receiving_method,
+        receiving_money_network_id,
+        receiving_bank_id,
+        receiving_bank_account,
+        payment_proof_key,
+        exchange_rate,
+        fee,
+        amount_sent,
+        amount_received,
+        notes
+    )
+VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10,
+        $11,
+        $12,
+        $13,
+        $14,
+        $15,
+        $16
+    )
+RETURNING id
+`
+
+type CreateTransferParams struct {
+	Reference                  string
+	RouteID                    uuid.UUID
+	Status                     TransferStatus
+	SenderPhone                string
+	ReceivingAccountName       string
+	ReceivingMobileMoneyNumber *string
+	ReceivingMethod            ReceivingMethods
+	ReceivingMoneyNetworkID    pgtype.UUID
+	ReceivingBankID            pgtype.UUID
+	ReceivingBankAccount       *string
+	PaymentProofKey            *string
+	ExchangeRate               pgtype.Numeric
+	Fee                        pgtype.Numeric
+	AmountSent                 pgtype.Numeric
+	AmountReceived             pgtype.Numeric
+	Notes                      *string
+}
+
+func (q *Queries) CreateTransfer(ctx context.Context, arg CreateTransferParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, createTransfer,
+		arg.Reference,
+		arg.RouteID,
+		arg.Status,
+		arg.SenderPhone,
+		arg.ReceivingAccountName,
+		arg.ReceivingMobileMoneyNumber,
+		arg.ReceivingMethod,
+		arg.ReceivingMoneyNetworkID,
+		arg.ReceivingBankID,
+		arg.ReceivingBankAccount,
+		arg.PaymentProofKey,
+		arg.ExchangeRate,
+		arg.Fee,
+		arg.AmountSent,
+		arg.AmountReceived,
+		arg.Notes,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getTransferByReference = `-- name: GetTransferByReference :one
-SELECT id, reference, route_id, status, sender_name, sender_phone, recipient_name, recipient_phone, receiving_method, network_name, bank_name, recipient_account, send_amount, receive_amount, source_currency, destination_currency, exchange_rate, fee, payment_channel, payment_proof_key, notes, created_at, updated_at, deleted_at
+SELECT id, reference, route_id, status, sender_phone, receiving_account_name, receiving_mobile_money_number, receiving_method, receiving_money_network_id, receiving_bank_id, receiving_bank_account, payment_proof_key, exchange_rate, fee, amount_sent, amount_received, notes, created_at, updated_at, deleted_at
 FROM transfers
 WHERE reference = $1
 `
@@ -23,22 +109,18 @@ func (q *Queries) GetTransferByReference(ctx context.Context, reference string) 
 		&i.Reference,
 		&i.RouteID,
 		&i.Status,
-		&i.SenderName,
 		&i.SenderPhone,
-		&i.RecipientName,
-		&i.RecipientPhone,
+		&i.ReceivingAccountName,
+		&i.ReceivingMobileMoneyNumber,
 		&i.ReceivingMethod,
-		&i.NetworkName,
-		&i.BankName,
-		&i.RecipientAccount,
-		&i.SendAmount,
-		&i.ReceiveAmount,
-		&i.SourceCurrency,
-		&i.DestinationCurrency,
+		&i.ReceivingMoneyNetworkID,
+		&i.ReceivingBankID,
+		&i.ReceivingBankAccount,
+		&i.PaymentProofKey,
 		&i.ExchangeRate,
 		&i.Fee,
-		&i.PaymentChannel,
-		&i.PaymentProofKey,
+		&i.AmountSent,
+		&i.AmountReceived,
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,

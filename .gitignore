@@ -1,0 +1,8 @@
+.env
+.env.local
+tmp/
+build/
+
+.DS_Store
+.vscode/
+.cursor/

@@ -21,7 +21,7 @@ func (c *Controller) createTransfer(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, err)
 		return
 	}
-	transfer, err := c.svc.CreateTransfer(body)
+	transfer, err := c.svc.CreateTransfer(r.Context(), body)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err)
 		return
