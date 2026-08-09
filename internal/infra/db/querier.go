@@ -22,7 +22,7 @@ type Querier interface {
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	GetPaymentChannelByCountryID(ctx context.Context, countryID int64) (PaymentChannel, error)
 	GetPaymentChannelByID(ctx context.Context, id uuid.UUID) (PaymentChannel, error)
-	GetTransferByReference(ctx context.Context, reference string) (Transfer, error)
+	GetTransferByReference(ctx context.Context, reference string) (GetTransferByReferenceRow, error)
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) (IdempotencyKey, error)
 	ListCountries(ctx context.Context) ([]Country, error)
 	UpdateCountry(ctx context.Context, arg UpdateCountryParams) (Country, error)

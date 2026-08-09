@@ -33,3 +33,9 @@ func UuidToPgtype(id uuid.UUID) pgtype.UUID {
 	return pgtype.UUID{Bytes: id, Valid: true}
 }
 
+func PgUuidToUuid(id pgtype.UUID) uuid.UUID {
+	if !id.Valid {
+		return uuid.Nil
+	}
+	return uuid.UUID(id.Bytes)
+}

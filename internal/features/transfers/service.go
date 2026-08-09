@@ -31,6 +31,9 @@ func NewService(db *pgxpool.Pool, queries *db.Queries) *Service {
 }
 
 func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest, idemKey string) (createTransferResponse, error) {
+	if idemKey == "" {
+		return createTransferResponse{}, fmt.Errorf("%w: idempotency key is required", httpx.BadRequestError)
+	}
 	actorID := body.SenderPhone
 	reqHash := hashCreateTransferRequest(body)
 
@@ -303,4 +306,22 @@ func hashCreateTransferRequest(body createTransferRequest) string {
 	payload, _ := json.Marshal(body)
 	sum := sha256.Sum256(payload)
 	return hex.EncodeToString(sum[:])
+}
+
+
+func (s *Service) GetByReference(ctx context.Context, reference string) (getTransferResponse, error) {
+	if reference == "" {
+		return getTransferResponse{}, fmt.Errorf("%w: reference is required", httpx.BadRequestError)
+	}
+
+	transfer, err := s.queries.GetTransferByReference(ctx, reference)
+	if err != nil {
+		return getTransferResponse{}, common.TranslateDBError(err)
+	}
+
+	transferDTO, err := mapTransferToDTO(transfer)
+	if err != nil {
+		return getTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
+	}
+	return transferDTO, nil
 }

@@ -101,14 +101,64 @@ func (q *Queries) CreateTransfer(ctx context.Context, arg CreateTransferParams) 
 }
 
 const getTransferByReference = `-- name: GetTransferByReference :one
-SELECT id, reference, route_id, status, sender_phone, receiving_account_name, receiving_mobile_money_number, receiving_method, receiving_money_network_id, receiving_bank_id, receiving_bank_account, payment_proof_key, exchange_rate, fee, amount_sent, amount_received, notes, expires_at, created_at, updated_at, deleted_at
-FROM transfers
-WHERE reference = $1
+SELECT t.id, t.reference, t.route_id, t.status, t.sender_phone, t.receiving_account_name, t.receiving_mobile_money_number, t.receiving_method, t.receiving_money_network_id, t.receiving_bank_id, t.receiving_bank_account, t.payment_proof_key, t.exchange_rate, t.fee, t.amount_sent, t.amount_received, t.notes, t.expires_at, t.created_at, t.updated_at, t.deleted_at,
+    src.id AS source_country_id,
+    src.name AS source_country_name,
+    src.currency_code AS source_currency_code,
+    src.currency_symbol AS source_currency_symbol,
+    dst.id AS destination_country_id,
+    dst.name AS destination_country_name,
+    dst.currency_code AS destination_currency_code,
+    dst.currency_symbol AS destination_currency_symbol,
+    network.name AS receiving_network_name,
+    bank.name AS receiving_bank_name
+FROM transfers t
+    JOIN routes r ON r.id = t.route_id
+    JOIN countries src ON src.id = r.source_country_id
+    JOIN countries dst ON dst.id = r.destination_country_id
+    LEFT JOIN payment_channels network ON network.id = t.receiving_money_network_id
+    LEFT JOIN payment_channels bank ON bank.id = t.receiving_bank_id
+WHERE t.reference = $1
+    AND t.deleted_at IS NULL
 `
 
-func (q *Queries) GetTransferByReference(ctx context.Context, reference string) (Transfer, error) {
+type GetTransferByReferenceRow struct {
+	ID                         uuid.UUID
+	Reference                  string
+	RouteID                    uuid.UUID
+	Status                     TransferStatus
+	SenderPhone                string
+	ReceivingAccountName       string
+	ReceivingMobileMoneyNumber *string
+	ReceivingMethod            ReceivingMethods
+	ReceivingMoneyNetworkID    pgtype.UUID
+	ReceivingBankID            pgtype.UUID
+	ReceivingBankAccount       *string
+	PaymentProofKey            *string
+	ExchangeRate               pgtype.Numeric
+	Fee                        pgtype.Numeric
+	AmountSent                 pgtype.Numeric
+	AmountReceived             pgtype.Numeric
+	Notes                      *string
+	ExpiresAt                  time.Time
+	CreatedAt                  time.Time
+	UpdatedAt                  time.Time
+	DeletedAt                  pgtype.Timestamptz
+	SourceCountryID            int64
+	SourceCountryName          string
+	SourceCurrencyCode         string
+	SourceCurrencySymbol       string
+	DestinationCountryID       int64
+	DestinationCountryName     string
+	DestinationCurrencyCode    string
+	DestinationCurrencySymbol  string
+	ReceivingNetworkName       *string
+	ReceivingBankName          *string
+}
+
+func (q *Queries) GetTransferByReference(ctx context.Context, reference string) (GetTransferByReferenceRow, error) {
 	row := q.db.QueryRow(ctx, getTransferByReference, reference)
-	var i Transfer
+	var i GetTransferByReferenceRow
 	err := row.Scan(
 		&i.ID,
 		&i.Reference,
@@ -131,6 +181,16 @@ func (q *Queries) GetTransferByReference(ctx context.Context, reference string) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.SourceCountryID,
+		&i.SourceCountryName,
+		&i.SourceCurrencyCode,
+		&i.SourceCurrencySymbol,
+		&i.DestinationCountryID,
+		&i.DestinationCountryName,
+		&i.DestinationCurrencyCode,
+		&i.DestinationCurrencySymbol,
+		&i.ReceivingNetworkName,
+		&i.ReceivingBankName,
 	)
 	return i, err
 }
