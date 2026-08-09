@@ -1,6 +1,7 @@
 package transfers
 
 import (
+	"fmt"
 	"net/http"
 
 	"cnmt/internal/common/httpx"
@@ -15,13 +16,20 @@ func NewController(service *Service) *Controller {
 }
 
 func (c *Controller) createTransfer(w http.ResponseWriter, r *http.Request) {
+
+	idemKey := r.Header.Get("Idempotency-Key")
+	if idemKey == "" {
+		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: idempotency key is required", httpx.BadRequestError))
+		return
+	}
+
 	body, err := httpx.DecodeAndValidate[createTransferRequest](r)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err)
 		return
 	}
 
-	transfer, err := c.svc.CreateTransfer(r.Context(), body)
+	transfer, err := c.svc.CreateTransfer(r.Context(), body, idemKey)
 	if err != nil {
 		httpx.WriteError(w, httpx.StatusFromError(err), err)
 		return

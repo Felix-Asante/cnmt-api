@@ -2,7 +2,12 @@ package transfers
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"cnmt/internal/common"
@@ -10,6 +15,7 @@ import (
 	"cnmt/internal/infra/db"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
@@ -24,12 +30,82 @@ func NewService(db *pgxpool.Pool, queries *db.Queries) *Service {
 	return &Service{db: db, queries: queries}
 }
 
-func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest) (createTransferResponse, error) {
+func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest, idemKey string) (createTransferResponse, error) {
+	actorID := body.SenderPhone
+	reqHash := hashCreateTransferRequest(body)
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return createTransferResponse{}, common.TranslateDBError(err)
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := s.queries.WithTx(tx)
+
+	_, err = qtx.InsertIdempotencyKey(ctx, db.InsertIdempotencyKeyParams{
+		Key:         idemKey,
+		ActorID:     actorID,
+		RequestHash: reqHash,
+		ExpiresAt:   time.Now().UTC().Add(24 * time.Hour),
+	})
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return createTransferResponse{}, common.TranslateDBError(err)
+		}
+
+		existing, getErr := qtx.GetIdempotencyKey(ctx, db.GetIdempotencyKeyParams{
+			ActorID: actorID,
+			Key:     idemKey,
+		})
+		if getErr != nil {
+			return createTransferResponse{}, common.TranslateDBError(getErr)
+		}
+		if existing.RequestHash != reqHash {
+			return createTransferResponse{}, fmt.Errorf("%w: idempotency key reused with a different request", httpx.ConflictError)
+		}
+		if existing.Status == "completed" {
+			var resp createTransferResponse
+			if err := json.Unmarshal(existing.ResponseBody, &resp); err != nil {
+				return createTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
+			}
+			return resp, nil
+		}
+		return createTransferResponse{}, fmt.Errorf("%w: request with this idempotency key is already in progress", httpx.ConflictError)
+	}
+
+	resp, err := s.createTransfer(ctx, qtx, body)
+	if err != nil {
+		return createTransferResponse{}, err
+	}
+
+	raw, err := json.Marshal(resp)
+	if err != nil {
+		return createTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
+	}
+	code := int32(http.StatusCreated)
+	if err := qtx.CompleteIdempotencyKey(ctx, db.CompleteIdempotencyKeyParams{
+		ActorID:      actorID,
+		Key:          idemKey,
+		ResponseCode: &code,
+		ResponseBody: raw,
+		TransferID:   common.UuidToPgtype(resp.TransferID),
+	}); err != nil {
+		return createTransferResponse{}, common.TranslateDBError(err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return createTransferResponse{}, common.TranslateDBError(err)
+	}
+
+	return resp, nil
+}
+
+func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body createTransferRequest) (createTransferResponse, error) {
 	if body.SourceCountryID == body.DestinationCountryID {
 		return createTransferResponse{}, fmt.Errorf("%w: source and destination countries must be different", httpx.BadRequestError)
 	}
 
-	route, err := s.queries.GetActiveRouteByCountries(ctx, db.GetActiveRouteByCountriesParams{
+	route, err := q.GetActiveRouteByCountries(ctx, db.GetActiveRouteByCountriesParams{
 		SourceCountryID:      body.SourceCountryID,
 		DestinationCountryID: body.DestinationCountryID,
 	})
@@ -67,7 +143,7 @@ func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest
 		return createTransferResponse{}, err
 	}
 
-	if err := s.validatePaymentChannel(ctx, body.DestinationCountryID, body.Recipient.ReceivingMethod, networkID, bankID); err != nil {
+	if err := validatePaymentChannel(ctx, q, body.DestinationCountryID, body.Recipient.ReceivingMethod, networkID, bankID); err != nil {
 		return createTransferResponse{}, err
 	}
 
@@ -91,7 +167,7 @@ func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest
 
 	expiresAt := time.Now().UTC().Add(24 * time.Hour)
 
-	transferID, err := s.queries.CreateTransfer(ctx, db.CreateTransferParams{
+	transferID, err := q.CreateTransfer(ctx, db.CreateTransferParams{
 		Reference:                  reference,
 		RouteID:                    route.ID,
 		Status:                     db.TransferStatusPENDINGPAYMENT,
@@ -142,7 +218,7 @@ func receivingDetails(recipient *recipientDTO) (networkID, bankID pgtype.UUID, m
 	}
 }
 
-func (s *Service) validatePaymentChannel(ctx context.Context, countryID int64, method db.ReceivingMethods, networkID, bankID pgtype.UUID) error {
+func validatePaymentChannel(ctx context.Context, q *db.Queries, countryID int64, method db.ReceivingMethods, networkID, bankID pgtype.UUID) error {
 	var channelID uuid.UUID
 	switch method {
 	case db.ReceivingMethodsBANK:
@@ -159,7 +235,7 @@ func (s *Service) validatePaymentChannel(ctx context.Context, countryID int64, m
 		return fmt.Errorf("%w: unsupported receiving method", httpx.BadRequestError)
 	}
 
-	pch, err := s.queries.GetActivePCByCountryTypeAndID(ctx, db.GetActivePCByCountryTypeAndIDParams{
+	pch, err := q.GetActivePCByCountryTypeAndID(ctx, db.GetActivePCByCountryTypeAndIDParams{
 		CountryID:   countryID,
 		ChannelType: method,
 		ID:          channelID,
@@ -221,4 +297,10 @@ func calculateFee(amountPaid decimal.Decimal, feeType db.FeeType, fee pgtype.Num
 	default:
 		return decimal.Zero, fmt.Errorf("%w: unsupported fee type", httpx.BadRequestError)
 	}
+}
+
+func hashCreateTransferRequest(body createTransferRequest) string {
+	payload, _ := json.Marshal(body)
+	sum := sha256.Sum256(payload)
+	return hex.EncodeToString(sum[:])
 }

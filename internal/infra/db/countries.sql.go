@@ -21,7 +21,7 @@ type CreateCountryParams struct {
 	Name     string
 	IsoCode  string
 	Flag     string
-	IsActive *bool
+	IsActive bool
 }
 
 func (q *Queries) CreateCountry(ctx context.Context, arg CreateCountryParams) (Country, error) {
@@ -286,7 +286,7 @@ type UpdateCountryParams struct {
 	Name     string
 	IsoCode  string
 	Flag     string
-	IsActive *bool
+	IsActive bool
 }
 
 func (q *Queries) UpdateCountry(ctx context.Context, arg UpdateCountryParams) (Country, error) {

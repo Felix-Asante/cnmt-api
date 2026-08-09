@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	CompleteIdempotencyKey(ctx context.Context, arg CompleteIdempotencyKeyParams) error
 	CreateCountry(ctx context.Context, arg CreateCountryParams) (Country, error)
 	CreatePaymentChannel(ctx context.Context, arg CreatePaymentChannelParams) (PaymentChannel, error)
 	CreateTransfer(ctx context.Context, arg CreateTransferParams) (uuid.UUID, error)
@@ -18,9 +19,11 @@ type Querier interface {
 	GetActivePCByCountryTypeAndID(ctx context.Context, arg GetActivePCByCountryTypeAndIDParams) (PaymentChannel, error)
 	GetActiveRouteByCountries(ctx context.Context, arg GetActiveRouteByCountriesParams) (Route, error)
 	GetCountryByID(ctx context.Context, id int64) (Country, error)
+	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	GetPaymentChannelByCountryID(ctx context.Context, countryID int64) (PaymentChannel, error)
 	GetPaymentChannelByID(ctx context.Context, id uuid.UUID) (PaymentChannel, error)
 	GetTransferByReference(ctx context.Context, reference string) (Transfer, error)
+	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) (IdempotencyKey, error)
 	ListCountries(ctx context.Context) ([]Country, error)
 	UpdateCountry(ctx context.Context, arg UpdateCountryParams) (Country, error)
 }

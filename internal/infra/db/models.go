@@ -149,13 +149,26 @@ type Country struct {
 	Name           string
 	IsoCode        string
 	Flag           string
-	IsActive       *bool
+	IsActive       bool
 	CurrencyName   string
 	CurrencyCode   string
 	CurrencySymbol string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	DeletedAt      pgtype.Timestamptz
+}
+
+type IdempotencyKey struct {
+	ID           uuid.UUID
+	Key          string
+	ActorID      string
+	RequestHash  string
+	Status       string
+	ResponseCode *int32
+	ResponseBody []byte
+	TransferID   pgtype.UUID
+	CreatedAt    time.Time
+	ExpiresAt    time.Time
 }
 
 type PaymentChannel struct {
