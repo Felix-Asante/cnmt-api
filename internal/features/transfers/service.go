@@ -1,11 +1,13 @@
 package transfers
 
 import (
-	"cnmt/internal/common"
-	"cnmt/internal/infra/db"
 	"context"
-	"errors"
+	"fmt"
 	"time"
+
+	"cnmt/internal/common"
+	"cnmt/internal/common/httpx"
+	"cnmt/internal/infra/db"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -14,7 +16,7 @@ import (
 )
 
 type Service struct {
-	db *pgxpool.Pool
+	db      *pgxpool.Pool
 	queries *db.Queries
 }
 
@@ -23,140 +25,200 @@ func NewService(db *pgxpool.Pool, queries *db.Queries) *Service {
 }
 
 func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest) (createTransferResponse, error) {
-	// validate route
+	if body.SourceCountryID == body.DestinationCountryID {
+		return createTransferResponse{}, fmt.Errorf("%w: source and destination countries must be different", httpx.BadRequestError)
+	}
+
 	route, err := s.queries.GetActiveRouteByCountries(ctx, db.GetActiveRouteByCountriesParams{
-		SourceCountryID: body.SourceCountryID,
+		SourceCountryID:      body.SourceCountryID,
 		DestinationCountryID: body.DestinationCountryID,
 	})
 	if err != nil {
 		return createTransferResponse{}, common.TranslateDBError(err)
 	}
-	if route.ID == uuid.Nil {
-		return createTransferResponse{}, errors.New("route not found")
-	}
 
-	amtPaid,amountPaidErr := decimal.NewFromString(body.AmountSent)
-	if amountPaidErr != nil {
-		return createTransferResponse{}, errors.New("amount sent is not valid")
+	amtPaid, err := decimal.NewFromString(body.AmountSent)
+	if err != nil {
+		return createTransferResponse{}, fmt.Errorf("%w: amount sent is not valid", httpx.BadRequestError)
 	}
-	
+	amtPaid = common.RoundMoney(amtPaid)
+
 	if err := validateAmountPaid(amtPaid, route.MinTransferAmount, route.MaxTransferAmount); err != nil {
 		return createTransferResponse{}, err
 	}
 
-	
-	// validate amount received
-	decimalExchangeRate := common.ConvertPgNumericToDecimal(route.DefaultExchangeRate)
-	
-
-	calculatedFee, calculatedFeeErr := calculateFee(amtPaid, route.FeeType, route.Fee)
-	if calculatedFeeErr != nil {
-		return createTransferResponse{}, calculatedFeeErr
+	rate, err := common.PgNumericToDecimal(route.DefaultExchangeRate)
+	if err != nil || !rate.IsPositive() {
+		return createTransferResponse{}, fmt.Errorf("%w: exchange rate is not configured", httpx.BadRequestError)
 	}
 
-	amtToReceive := amtPaid.Mul(decimalExchangeRate)
-	amtToReceive = amtToReceive.Sub(calculatedFee)
-
-	// does network/bank exist?
-	if err := s.validateNetwork(ctx, body.DestinationCountryID, body.Recipient.ReceivingMethod, body.Recipient.ReceivingNetworkID, body.Recipient.BankID); err != nil {
+	calculatedFee, err := calculateFee(amtPaid, route.FeeType, route.Fee)
+	if err != nil {
 		return createTransferResponse{}, err
 	}
 
-	reference := common.GenerateReference()
-
-	expiresIn := time.Now().Add(time.Hour * 24) // 24 hours
-
-	params := db.CreateTransferParams{
-		Reference: reference,
-    	RouteID: route.ID,
-		Status: db.TransferStatusPENDINGPAYMENT,
-		SenderPhone: body.SenderPhone,
-		ReceivingAccountName: body.Recipient.RecipientName,
-		ReceivingMobileMoneyNumber: body.Recipient.RecipientPhone,
-		ReceivingMethod: body.Recipient.ReceivingMethod,
-		ReceivingMoneyNetworkID: common.UuidPtrToPgtype(body.Recipient.ReceivingNetworkID),
-		ReceivingBankID:         common.UuidPtrToPgtype(body.Recipient.BankID),
-		ReceivingBankAccount: body.Recipient.AccountNumber,
-		PaymentProofKey: nil,
-		ExchangeRate: route.DefaultExchangeRate,
-		Fee: calculatedFee,
-		AmountSent: amtPaid,
-		AmountReceived: amtToReceive,
-		Notes: body.Notes,
-		ExpiresAt: expiresIn,
+	amtToReceive := common.RoundMoney(amtPaid.Mul(rate).Sub(calculatedFee))
+	if !amtToReceive.IsPositive() {
+		return createTransferResponse{}, fmt.Errorf("%w: amount received must be greater than zero after fees", httpx.BadRequestError)
 	}
-	
 
-	transfer, err := s.queries.CreateTransfer(ctx, params)
+	networkID, bankID, mobileNumber, bankAccount, err := receivingDetails(body.Recipient)
+	if err != nil {
+		return createTransferResponse{}, err
+	}
+
+	if err := s.validatePaymentChannel(ctx, body.DestinationCountryID, body.Recipient.ReceivingMethod, networkID, bankID); err != nil {
+		return createTransferResponse{}, err
+	}
+
+	feeNumeric, err := common.DecimalToPgNumeric(calculatedFee)
+	if err != nil {
+		return createTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
+	}
+	sentNumeric, err := common.DecimalToPgNumeric(amtPaid)
+	if err != nil {
+		return createTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
+	}
+	receivedNumeric, err := common.DecimalToPgNumeric(amtToReceive)
+	if err != nil {
+		return createTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
+	}
+
+	reference := common.GenerateReference()
+	if reference == "" {
+		return createTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
+	}
+
+	expiresAt := time.Now().UTC().Add(24 * time.Hour)
+
+	transferID, err := s.queries.CreateTransfer(ctx, db.CreateTransferParams{
+		Reference:                  reference,
+		RouteID:                    route.ID,
+		Status:                     db.TransferStatusPENDINGPAYMENT,
+		SenderPhone:                body.SenderPhone,
+		ReceivingAccountName:       body.Recipient.RecipientName,
+		ReceivingMobileMoneyNumber: mobileNumber,
+		ReceivingMethod:            body.Recipient.ReceivingMethod,
+		ReceivingMoneyNetworkID:    networkID,
+		ReceivingBankID:            bankID,
+		ReceivingBankAccount:       bankAccount,
+		PaymentProofKey:            nil,
+		ExchangeRate:               route.DefaultExchangeRate,
+		Fee:                        feeNumeric,
+		AmountSent:                 sentNumeric,
+		AmountReceived:             receivedNumeric,
+		Notes:                      body.Notes,
+		ExpiresAt:                  expiresAt,
+	})
 	if err != nil {
 		return createTransferResponse{}, common.TranslateDBError(err)
 	}
+
 	return createTransferResponse{
-		TransferID: transfer,
-		Reference: reference,
-		ExpiresIn: expiresIn.Unix(),
+		TransferID: transferID,
+		Reference:  reference,
+		ExpiresIn:  expiresAt.Unix(),
 	}, nil
 }
 
-func (s *Service) validateNetwork(ctx context.Context, recipientCountryID int64, receivingMethod db.ReceivingMethods, receivingNetworkID,bankID *uuid.UUID) error {
-	var moneyNetworkId uuid.UUID
-	switch receivingMethod {
+func receivingDetails(recipient *recipientDTO) (networkID, bankID pgtype.UUID, mobileNumber, bankAccount *string, err error) {
+	if recipient == nil {
+		return pgtype.UUID{}, pgtype.UUID{}, nil, nil, fmt.Errorf("%w: recipient is required", httpx.BadRequestError)
+	}
+
+	switch recipient.ReceivingMethod {
 	case db.ReceivingMethodsBANK:
-		if bankID == nil {
-			return errors.New("bank not found")
+		if recipient.BankID == nil {
+			return pgtype.UUID{}, pgtype.UUID{}, nil, nil, fmt.Errorf("%w: bank is required", httpx.BadRequestError)
 		}
-		moneyNetworkId = *bankID
+		return pgtype.UUID{}, common.UuidPtrToPgtype(recipient.BankID), nil, recipient.AccountNumber, nil
 	case db.ReceivingMethodsMOBILEMONEY:
-		if receivingNetworkID == nil {
-			return errors.New("mobile money network not found")
+		if recipient.ReceivingNetworkID == nil {
+			return pgtype.UUID{}, pgtype.UUID{}, nil, nil, fmt.Errorf("%w: mobile money network is required", httpx.BadRequestError)
 		}
-		moneyNetworkId = *receivingNetworkID
+		return common.UuidPtrToPgtype(recipient.ReceivingNetworkID), pgtype.UUID{}, recipient.RecipientPhone, nil, nil
+	default:
+		return pgtype.UUID{}, pgtype.UUID{}, nil, nil, fmt.Errorf("%w: unsupported receiving method", httpx.BadRequestError)
 	}
-	if moneyNetworkId == uuid.Nil {
-		return errors.New("Payment channel not found")
+}
+
+func (s *Service) validatePaymentChannel(ctx context.Context, countryID int64, method db.ReceivingMethods, networkID, bankID pgtype.UUID) error {
+	var channelID uuid.UUID
+	switch method {
+	case db.ReceivingMethodsBANK:
+		if !bankID.Valid {
+			return fmt.Errorf("%w: bank not found", httpx.BadRequestError)
+		}
+		channelID = bankID.Bytes
+	case db.ReceivingMethodsMOBILEMONEY:
+		if !networkID.Valid {
+			return fmt.Errorf("%w: mobile money network not found", httpx.BadRequestError)
+		}
+		channelID = networkID.Bytes
+	default:
+		return fmt.Errorf("%w: unsupported receiving method", httpx.BadRequestError)
 	}
-	
+
 	pch, err := s.queries.GetActivePCByCountryTypeAndID(ctx, db.GetActivePCByCountryTypeAndIDParams{
-		CountryID: recipientCountryID,
-		ChannelType: receivingMethod,
-		ID: moneyNetworkId,
+		CountryID:   countryID,
+		ChannelType: method,
+		ID:          channelID,
 	})
 	if err != nil {
-		return err
+		return common.TranslateDBError(err)
 	}
 	if pch.ID == uuid.Nil {
-		return errors.New("Payment channel not found")
+		return fmt.Errorf("%w: payment channel not found", httpx.NotFoundError)
 	}
 	return nil
 }
 
-
 func validateAmountPaid(amountPaid decimal.Decimal, minTransferAmount, maxTransferAmount pgtype.Numeric) error {
-	
-	minTransferAmountDecimal := common.ConvertPgNumericToDecimal(minTransferAmount)
-	maxTransferAmountDecimal := common.ConvertPgNumericToDecimal(maxTransferAmount)
-	
-	if !minTransferAmountDecimal.IsZero() && amountPaid.LessThan(minTransferAmountDecimal) {
-		return errors.New("amount paid is less than the minimum transfer amount required to complete the transfer")
+	if !amountPaid.IsPositive() {
+		return fmt.Errorf("%w: amount sent must be greater than zero", httpx.BadRequestError)
 	}
-	if !maxTransferAmountDecimal.IsZero() && amountPaid.GreaterThan(maxTransferAmountDecimal) {
-		return errors.New("amount paid is greater than the maximum transfer amount allowed to complete the transfer")
+
+	if minTransferAmount.Valid {
+		minAmount, err := common.PgNumericToDecimal(minTransferAmount)
+		if err != nil {
+			return fmt.Errorf("%w: route minimum amount is invalid", httpx.BadRequestError)
+		}
+		if amountPaid.LessThan(minAmount) {
+			return fmt.Errorf("%w: amount sent is less than the minimum transfer amount", httpx.BadRequestError)
+		}
 	}
-	
+
+	if maxTransferAmount.Valid {
+		maxAmount, err := common.PgNumericToDecimal(maxTransferAmount)
+		if err != nil {
+			return fmt.Errorf("%w: route maximum amount is invalid", httpx.BadRequestError)
+		}
+		if !maxAmount.IsZero() && amountPaid.GreaterThan(maxAmount) {
+			return fmt.Errorf("%w: amount sent is greater than the maximum transfer amount", httpx.BadRequestError)
+		}
+	}
+
 	return nil
 }
 
 func calculateFee(amountPaid decimal.Decimal, feeType db.FeeType, fee pgtype.Numeric) (decimal.Decimal, error) {
-	var decimalFee decimal.Decimal
-	if feeType == db.FeeTypeFixed {
-		decimalFee = common.ConvertPgNumericToDecimal(fee)
-	} else {
-		feeDecimal := common.ConvertPgNumericToDecimal(fee)
-		if feeDecimal.LessThan(decimal.Zero) || feeDecimal.GreaterThan(decimal.NewFromInt(100)) {
-			return decimal.Zero, errors.New("fee is not valid")
-		}
-		decimalFee = feeDecimal.Div(decimal.NewFromInt(100))
-		decimalFee = decimalFee.Mul(amountPaid)
+	feeValue, err := common.PgNumericToDecimal(fee)
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("%w: fee is not configured", httpx.BadRequestError)
 	}
-	return decimalFee, nil
+	if feeValue.IsNegative() {
+		return decimal.Zero, fmt.Errorf("%w: fee is not valid", httpx.BadRequestError)
+	}
+
+	switch feeType {
+	case db.FeeTypeFixed:
+		return common.RoundMoney(feeValue), nil
+	case db.FeeTypePercentage:
+		if feeValue.GreaterThan(decimal.NewFromInt(100)) {
+			return decimal.Zero, fmt.Errorf("%w: fee is not valid", httpx.BadRequestError)
+		}
+		return common.RoundMoney(amountPaid.Mul(feeValue).Div(decimal.NewFromInt(100))), nil
+	default:
+		return decimal.Zero, fmt.Errorf("%w: unsupported fee type", httpx.BadRequestError)
+	}
 }

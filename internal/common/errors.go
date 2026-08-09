@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"cnmt/internal/common/httpx"
@@ -19,22 +20,20 @@ const (
 	pgCheckViolation      = "23514"
 )
 
-
 func TranslateDBError(err error) error {
 	if err == nil {
 		return nil
 	}
 
-	
-	if errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("%w: %v", httpx.NotFoundError, err)
+	if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("%w", httpx.NotFoundError)
 	}
 
 	if errors.Is(err, context.Canceled) {
-		return fmt.Errorf("%w: %v", errors.New("request canceled"), err)
+		return fmt.Errorf("%w", httpx.BadRequestError)
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return fmt.Errorf("%w: %v", errors.New("request timeout"), err)
+		return fmt.Errorf("%w", httpx.GatewayTimeoutError)
 	}
 
 	var pgErr *pgconn.PgError
@@ -42,17 +41,21 @@ func TranslateDBError(err error) error {
 		return translatePgError(pgErr)
 	}
 
+	slog.Error("unhandled database error", "err", err)
 	return fmt.Errorf("%w", httpx.InternalServerError)
 }
 
 func translatePgError(pgErr *pgconn.PgError) error {
 	switch pgErr.Code {
 	case pgUniqueViolation:
-		return fmt.Errorf("%w: %s", errors.New("Record already exists"), constraintDetail(pgErr))
+		slog.Warn("unique violation", "constraint", pgErr.ConstraintName)
+		return fmt.Errorf("%w", httpx.ConflictError)
 	case pgNotNullViolation, pgCheckViolation:
-		return fmt.Errorf("%w: %s", errors.New("Required field is missing"), constraintDetail(pgErr))
+		slog.Warn("constraint violation", "code", pgErr.Code, "constraint", pgErr.ConstraintName)
+		return fmt.Errorf("%w", httpx.BadRequestError)
 	case pgForeignKeyViolation:
-		return fmt.Errorf("%w: %s", errors.New("foreign key violation"), constraintDetail(pgErr))
+		slog.Warn("foreign key violation", "constraint", pgErr.ConstraintName)
+		return fmt.Errorf("%w", httpx.BadRequestError)
 	default:
 		slog.Error("unhandled postgres error code",
 			"code", pgErr.Code,
@@ -61,11 +64,4 @@ func translatePgError(pgErr *pgconn.PgError) error {
 		)
 		return fmt.Errorf("%w", httpx.InternalServerError)
 	}
-}
-
-func constraintDetail(pgErr *pgconn.PgError) string {
-	if pgErr.ConstraintName != "" {
-		return pgErr.ConstraintName
-	}
-	return pgErr.Message
 }

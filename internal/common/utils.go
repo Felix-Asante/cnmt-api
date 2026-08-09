@@ -13,19 +13,13 @@ import (
 
 
 func GenerateReference() string {
-	now := time.Now()
-	day := now.Day()
-	month := now.Month()
-	year := now.Year()
-
+	now := time.Now().UTC()
 	entropy := ulid.Monotonic(rand.Reader, 0)
 	id, err := ulid.New(ulid.Timestamp(now), entropy)
 	if err != nil {
-		return ""
+		return fmt.Sprintf("CNMT-%s", uuid.New().String())
 	}
-
-	reference := fmt.Sprintf("CNMT-%d%d%d-%s", year, month, day, id.String())
-	return reference
+	return fmt.Sprintf("CNMT-%s", id.String())
 }
 
 func UuidPtrToPgtype(id *uuid.UUID) pgtype.UUID {
