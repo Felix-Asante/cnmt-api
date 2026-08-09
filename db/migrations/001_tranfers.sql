@@ -27,6 +27,7 @@ CREATE TABLE transfers(
     amount_sent NUMERIC(18, 2) NOT NULL,
     amount_received NUMERIC(18, 2) NOT NULL,
     notes TEXT,
+    expires_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     deleted_at TIMESTAMPTZ NULL DEFAULT NULL

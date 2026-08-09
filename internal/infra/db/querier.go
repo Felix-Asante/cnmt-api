@@ -12,9 +12,14 @@ import (
 
 type Querier interface {
 	CreateCountry(ctx context.Context, arg CreateCountryParams) (Country, error)
+	CreatePaymentChannel(ctx context.Context, arg CreatePaymentChannelParams) (PaymentChannel, error)
 	CreateTransfer(ctx context.Context, arg CreateTransferParams) (uuid.UUID, error)
 	DeleteCountry(ctx context.Context, id int64) error
+	GetActivePCByCountryTypeAndID(ctx context.Context, arg GetActivePCByCountryTypeAndIDParams) (PaymentChannel, error)
+	GetActiveRouteByCountries(ctx context.Context, arg GetActiveRouteByCountriesParams) (Route, error)
 	GetCountryByID(ctx context.Context, id int64) (Country, error)
+	GetPaymentChannelByCountryID(ctx context.Context, countryID int64) (PaymentChannel, error)
+	GetPaymentChannelByID(ctx context.Context, id uuid.UUID) (PaymentChannel, error)
 	GetTransferByReference(ctx context.Context, reference string) (Transfer, error)
 	ListCountries(ctx context.Context) ([]Country, error)
 	UpdateCountry(ctx context.Context, arg UpdateCountryParams) (Country, error)

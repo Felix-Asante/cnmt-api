@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 const createCountry = `-- name: CreateCountry :one
@@ -46,6 +48,34 @@ func (q *Queries) CreateCountry(ctx context.Context, arg CreateCountryParams) (C
 	return i, err
 }
 
+const createPaymentChannel = `-- name: CreatePaymentChannel :one
+INSERT INTO payment_channels (name, channel_type, country_id)
+VALUES ($1, $2, $3)
+RETURNING id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at
+`
+
+type CreatePaymentChannelParams struct {
+	Name        string
+	ChannelType ReceivingMethods
+	CountryID   int64
+}
+
+func (q *Queries) CreatePaymentChannel(ctx context.Context, arg CreatePaymentChannelParams) (PaymentChannel, error) {
+	row := q.db.QueryRow(ctx, createPaymentChannel, arg.Name, arg.ChannelType, arg.CountryID)
+	var i PaymentChannel
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ChannelType,
+		&i.IsActive,
+		&i.CountryID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const deleteCountry = `-- name: DeleteCountry :exec
 DELETE FROM countries
 WHERE id = $1
@@ -56,10 +86,88 @@ func (q *Queries) DeleteCountry(ctx context.Context, id int64) error {
 	return err
 }
 
+const getActivePCByCountryTypeAndID = `-- name: GetActivePCByCountryTypeAndID :one
+SELECT pc.id, pc.name, pc.channel_type, pc.is_active, pc.country_id, pc.created_at, pc.updated_at, pc.deleted_at
+FROM payment_channels pc
+    JOIN countries c ON c.id = pc.country_id
+WHERE pc.country_id = $1
+    AND pc.channel_type = $2
+    AND pc.id = $3
+    AND pc.is_active = TRUE
+    AND pc.deleted_at IS NULL
+    AND c.is_active = TRUE
+    AND c.deleted_at IS NULL
+`
+
+type GetActivePCByCountryTypeAndIDParams struct {
+	CountryID   int64
+	ChannelType ReceivingMethods
+	ID          uuid.UUID
+}
+
+func (q *Queries) GetActivePCByCountryTypeAndID(ctx context.Context, arg GetActivePCByCountryTypeAndIDParams) (PaymentChannel, error) {
+	row := q.db.QueryRow(ctx, getActivePCByCountryTypeAndID, arg.CountryID, arg.ChannelType, arg.ID)
+	var i PaymentChannel
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ChannelType,
+		&i.IsActive,
+		&i.CountryID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getActiveRouteByCountries = `-- name: GetActiveRouteByCountries :one
+SELECT r.id, r.source_country_id, r.destination_country_id, r.is_active, r.default_exchange_rate, r.fee, r.fee_type, r.estimated_minutes, r.max_transfer_amount, r.min_transfer_amount, r.created_at, r.updated_at, r.deleted_at
+FROM routes r
+    JOIN countries source ON source.id = r.source_country_id
+    JOIN countries destination ON destination.id = r.destination_country_id
+WHERE r.source_country_id = $1
+    AND r.destination_country_id = $2
+    AND r.is_active = TRUE
+    AND r.deleted_at IS NULL
+    AND source.is_active = TRUE
+    AND source.deleted_at IS NULL
+    AND destination.is_active = TRUE
+    AND destination.deleted_at IS NULL
+`
+
+type GetActiveRouteByCountriesParams struct {
+	SourceCountryID      int64
+	DestinationCountryID int64
+}
+
+func (q *Queries) GetActiveRouteByCountries(ctx context.Context, arg GetActiveRouteByCountriesParams) (Route, error) {
+	row := q.db.QueryRow(ctx, getActiveRouteByCountries, arg.SourceCountryID, arg.DestinationCountryID)
+	var i Route
+	err := row.Scan(
+		&i.ID,
+		&i.SourceCountryID,
+		&i.DestinationCountryID,
+		&i.IsActive,
+		&i.DefaultExchangeRate,
+		&i.Fee,
+		&i.FeeType,
+		&i.EstimatedMinutes,
+		&i.MaxTransferAmount,
+		&i.MinTransferAmount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const getCountryByID = `-- name: GetCountryByID :one
 SELECT id, name, iso_code, flag, is_active, currency_name, currency_code, currency_symbol, created_at, updated_at, deleted_at
 FROM countries
 WHERE id = $1
+    AND is_active = TRUE
+    AND deleted_at IS NULL
 `
 
 func (q *Queries) GetCountryByID(ctx context.Context, id int64) (Country, error) {
@@ -74,6 +182,50 @@ func (q *Queries) GetCountryByID(ctx context.Context, id int64) (Country, error)
 		&i.CurrencyName,
 		&i.CurrencyCode,
 		&i.CurrencySymbol,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getPaymentChannelByCountryID = `-- name: GetPaymentChannelByCountryID :one
+SELECT id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at
+FROM payment_channels
+WHERE country_id = $1
+`
+
+func (q *Queries) GetPaymentChannelByCountryID(ctx context.Context, countryID int64) (PaymentChannel, error) {
+	row := q.db.QueryRow(ctx, getPaymentChannelByCountryID, countryID)
+	var i PaymentChannel
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ChannelType,
+		&i.IsActive,
+		&i.CountryID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getPaymentChannelByID = `-- name: GetPaymentChannelByID :one
+SELECT id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at
+FROM payment_channels
+WHERE id = $1
+`
+
+func (q *Queries) GetPaymentChannelByID(ctx context.Context, id uuid.UUID) (PaymentChannel, error) {
+	row := q.db.QueryRow(ctx, getPaymentChannelByID, id)
+	var i PaymentChannel
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ChannelType,
+		&i.IsActive,
+		&i.CountryID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,

@@ -19,7 +19,8 @@ INSERT INTO transfers (
         fee,
         amount_sent,
         amount_received,
-        notes
+        notes,
+        expires_at
     )
 VALUES (
         $1,
@@ -37,6 +38,7 @@ VALUES (
         $13,
         $14,
         $15,
-        $16
+        $16,
+        $17
     )
 RETURNING id;

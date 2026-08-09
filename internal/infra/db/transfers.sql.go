@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -29,7 +30,8 @@ INSERT INTO transfers (
         fee,
         amount_sent,
         amount_received,
-        notes
+        notes,
+        expires_at
     )
 VALUES (
         $1,
@@ -47,7 +49,8 @@ VALUES (
         $13,
         $14,
         $15,
-        $16
+        $16,
+        $17
     )
 RETURNING id
 `
@@ -69,6 +72,7 @@ type CreateTransferParams struct {
 	AmountSent                 pgtype.Numeric
 	AmountReceived             pgtype.Numeric
 	Notes                      *string
+	ExpiresAt                  time.Time
 }
 
 func (q *Queries) CreateTransfer(ctx context.Context, arg CreateTransferParams) (uuid.UUID, error) {
@@ -89,6 +93,7 @@ func (q *Queries) CreateTransfer(ctx context.Context, arg CreateTransferParams) 
 		arg.AmountSent,
 		arg.AmountReceived,
 		arg.Notes,
+		arg.ExpiresAt,
 	)
 	var id uuid.UUID
 	err := row.Scan(&id)
@@ -96,7 +101,7 @@ func (q *Queries) CreateTransfer(ctx context.Context, arg CreateTransferParams) 
 }
 
 const getTransferByReference = `-- name: GetTransferByReference :one
-SELECT id, reference, route_id, status, sender_phone, receiving_account_name, receiving_mobile_money_number, receiving_method, receiving_money_network_id, receiving_bank_id, receiving_bank_account, payment_proof_key, exchange_rate, fee, amount_sent, amount_received, notes, created_at, updated_at, deleted_at
+SELECT id, reference, route_id, status, sender_phone, receiving_account_name, receiving_mobile_money_number, receiving_method, receiving_money_network_id, receiving_bank_id, receiving_bank_account, payment_proof_key, exchange_rate, fee, amount_sent, amount_received, notes, expires_at, created_at, updated_at, deleted_at
 FROM transfers
 WHERE reference = $1
 `
@@ -122,6 +127,7 @@ func (q *Queries) GetTransferByReference(ctx context.Context, reference string) 
 		&i.AmountSent,
 		&i.AmountReceived,
 		&i.Notes,
+		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,

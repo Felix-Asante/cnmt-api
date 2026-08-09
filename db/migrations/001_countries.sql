@@ -22,8 +22,8 @@ CREATE TABLE routes(
     fee NUMERIC(18, 2) NOT NULL,
     fee_type fee_type NOT NULL DEFAULT 'fixed',
     estimated_minutes INTEGER,
-    max_transfer_amount NUMERIC(18, 2) NOT NULL,
-    min_transfer_amount NUMERIC(18, 2) NOT NULL,
+    max_transfer_amount NUMERIC(18, 2),
+    min_transfer_amount NUMERIC(18, 2),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     deleted_at TIMESTAMPTZ

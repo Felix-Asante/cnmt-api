@@ -203,6 +203,7 @@ type Transfer struct {
 	AmountSent                 pgtype.Numeric
 	AmountReceived             pgtype.Numeric
 	Notes                      *string
+	ExpiresAt                  time.Time
 	CreatedAt                  time.Time
 	UpdatedAt                  time.Time
 	DeletedAt                  pgtype.Timestamptz
