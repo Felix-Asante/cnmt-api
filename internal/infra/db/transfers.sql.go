@@ -194,3 +194,22 @@ func (q *Queries) GetTransferByReference(ctx context.Context, reference string) 
 	)
 	return i, err
 }
+
+const setPaymentProofKey = `-- name: SetPaymentProofKey :exec
+UPDATE transfers
+SET payment_proof_key = $1,
+    status = 'PAYMENT_RECEIVED'
+WHERE reference = $2
+    AND status = 'PENDING_PAYMENT'
+    AND deleted_at IS NULL
+`
+
+type SetPaymentProofKeyParams struct {
+	PaymentProofKey *string
+	Reference       string
+}
+
+func (q *Queries) SetPaymentProofKey(ctx context.Context, arg SetPaymentProofKeyParams) error {
+	_, err := q.db.Exec(ctx, setPaymentProofKey, arg.PaymentProofKey, arg.Reference)
+	return err
+}

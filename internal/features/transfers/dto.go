@@ -73,6 +73,7 @@ type getTransferResponse struct {
 	ExchangeRate        decimal.Decimal         `json:"exchange_rate"`
 	Fee                 decimal.Decimal         `json:"fee"`
 	SenderPhone         string                  `json:"sender_phone"`
+	PaymentProofKey     *string                 `json:"payment_proof_key,omitempty"`
 	Recipient           recipientViewDTO        `json:"recipient"`
 	Notes               *string                 `json:"notes,omitempty"`
 	ExpiresAt           time.Time               `json:"expires_at"`
@@ -87,6 +88,11 @@ type createPaymentProofSignedUrlRequest struct {
 type createPaymentProofSignedUrlResponse struct {
 	SignedURL   string `json:"signed_url"`
 	Key string `json:"key"`
+}
+
+type confirmPaymentProofRequest struct {
+	Reference string `json:"reference" validate:"required,min=1,max=50"`
+	Key       string `json:"key" validate:"required,min=1"`
 }
 
 func mapTransferToDTO(transfer db.GetTransferByReferenceRow) (getTransferResponse, error) {
@@ -129,6 +135,7 @@ func mapTransferToDTO(transfer db.GetTransferByReferenceRow) (getTransferRespons
 		ExchangeRate:   exchangeRate,
 		Fee:            fee,
 		SenderPhone:    transfer.SenderPhone,
+		PaymentProofKey: transfer.PaymentProofKey,
 		Recipient: recipientViewDTO{
 			Name:            transfer.ReceivingAccountName,
 			Phone:           transfer.ReceivingMobileMoneyNumber,

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 )
 
 
@@ -64,4 +67,26 @@ func (o *ObjStorage) GetPresignedUrl(ctx context.Context, key, contentType strin
 		return "", err
 	}
 	return presignedResult.URL, nil
+}
+
+func (o *ObjStorage) DoesObjectExist(ctx context.Context, key string) (bool, error) {
+	_, err := o.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(o.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		var nsk *types.NotFound
+		if errors.As(err, &nsk) {
+			return false, nil
+		}
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) {
+			switch apiErr.ErrorCode() {
+			case "NotFound", "NoSuchKey", "404":
+				return false, nil
+			}
+		}
+		return false, err
+	}
+	return true, nil
 }

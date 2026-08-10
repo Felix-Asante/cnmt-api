@@ -377,3 +377,36 @@ func (s *Service) CreatePaymentProofSignedUrl(ctx context.Context, reference str
 		Key: key,
 	}, nil
 }
+
+func (s *Service) ConfirmPaymentProof(ctx context.Context, body confirmPaymentProofRequest) error {
+	
+	transfer, err := s.queries.GetTransferByReference(ctx, body.Reference)
+	if err != nil {
+		return common.TranslateDBError(err)
+	}
+
+	if transfer.Status != db.TransferStatusPENDINGPAYMENT {
+		return fmt.Errorf("%w: transfer is not pending payment", httpx.BadRequestError)
+	}
+	
+	if transfer.PaymentProofKey != nil && *transfer.PaymentProofKey != body.Key {
+		return fmt.Errorf("%w: payment proof key is incorrect", httpx.BadRequestError)
+	}
+
+	exists, err := s.objStorage.DoesObjectExist(ctx, body.Key)
+	if err != nil {
+		return fmt.Errorf("%w: Failed to verify payment proof", httpx.InternalServerError)
+	}
+	if !exists {
+		return fmt.Errorf("%w: Payment proof has not been uploaded", httpx.BadRequestError)
+	}
+
+	if err := s.queries.SetPaymentProofKey(ctx, db.SetPaymentProofKeyParams{
+		Reference: body.Reference,
+		PaymentProofKey: &body.Key,
+	}); err != nil {
+		return common.TranslateDBError(err)
+	}
+
+	return nil
+}

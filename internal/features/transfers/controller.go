@@ -70,3 +70,18 @@ func (c *Controller) createPaymentProofSignedUrl(w http.ResponseWriter, r *http.
 	}
 	httpx.WriteJSON(w, http.StatusOK, resp)
 }
+
+func (c *Controller) confirmPaymentProof(w http.ResponseWriter, r *http.Request) {
+	body, err := httpx.DecodeAndValidate[confirmPaymentProofRequest](r)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	err = c.svc.ConfirmPaymentProof(r.Context(), body)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, nil)
+}

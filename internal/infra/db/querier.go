@@ -25,6 +25,7 @@ type Querier interface {
 	GetTransferByReference(ctx context.Context, reference string) (GetTransferByReferenceRow, error)
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) (IdempotencyKey, error)
 	ListCountries(ctx context.Context) ([]Country, error)
+	SetPaymentProofKey(ctx context.Context, arg SetPaymentProofKeyParams) error
 	UpdateCountry(ctx context.Context, arg UpdateCountryParams) (Country, error)
 }
 

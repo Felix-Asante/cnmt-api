@@ -58,3 +58,10 @@ VALUES (
         $17
     )
 RETURNING id;
+-- name: SetPaymentProofKey :exec
+UPDATE transfers
+SET payment_proof_key = $1,
+    status = 'PAYMENT_RECEIVED'
+WHERE reference = $2
+    AND status = 'PENDING_PAYMENT'
+    AND deleted_at IS NULL;

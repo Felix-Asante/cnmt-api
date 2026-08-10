@@ -7,5 +7,6 @@ func (c *Controller) Routes(r chi.Router) {
 		r.Post("/", c.createTransfer)
 		r.Get("/{reference}", c.getTransferByReference)
 		r.Post("/payment-proof/upload-url", c.createPaymentProofSignedUrl)
+		r.Patch("/payment-proof/confirm", c.confirmPaymentProof)
 	})
 }
