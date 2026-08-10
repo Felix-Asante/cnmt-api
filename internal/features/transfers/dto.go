@@ -83,15 +83,17 @@ type getTransferResponse struct {
 
 type createPaymentProofSignedUrlRequest struct {
 	Reference   string `json:"reference" validate:"required"`
+	ContentType string `json:"content_type" validate:"required,oneof=image/jpeg image/jpg image/png"`
 }
 
 type createPaymentProofSignedUrlResponse struct {
 	SignedURL   string `json:"signed_url"`
-	Key string `json:"key"`
+	Key         string `json:"key"`
+	ContentType string `json:"content_type"`
 }
 
 type confirmPaymentProofRequest struct {
-	Reference string `json:"reference" validate:"required,min=1,max=50"`
+	Reference string `json:"reference" validate:"required,min=1,max=100"`
 	Key       string `json:"key" validate:"required,min=1"`
 }
 

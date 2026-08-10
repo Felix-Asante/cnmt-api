@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"cnmt/internal/common"
@@ -352,61 +353,64 @@ func (s *Service) GetByReference(ctx context.Context, reference string) (getTran
 	return transferDTO, nil
 }
 
-func (s *Service) CreatePaymentProofSignedUrl(ctx context.Context, reference string) (createPaymentProofSignedUrlResponse, error) {
+func (s *Service) CreatePaymentProofSignedUrl(ctx context.Context, reference, contentType string) (createPaymentProofSignedUrlResponse, error) {
 	if reference == "" {
 		return createPaymentProofSignedUrlResponse{}, fmt.Errorf("%w: reference is required", httpx.BadRequestError)
+	}
+	if !storage.AllowedImageTypes[contentType] {
+		return createPaymentProofSignedUrlResponse{}, fmt.Errorf("%w: content_type must be image/jpeg, image/jpg, or image/png", httpx.BadRequestError)
 	}
 
 	transfer, err := s.queries.GetTransferByReference(ctx, reference)
 	if err != nil {
 		return createPaymentProofSignedUrlResponse{}, common.TranslateDBError(err)
 	}
-
 	if transfer.Status != db.TransferStatusPENDINGPAYMENT {
 		return createPaymentProofSignedUrlResponse{}, fmt.Errorf("%w: transfer is not pending payment", httpx.BadRequestError)
 	}
 
-	key := common.GenerateAssetKey("transfers", transfer.Reference, "payment-proof", storage.ContentTypeImage)
-	signedUrl, err := s.objStorage.GetPresignedUrl(ctx, key, storage.ContentTypeImage)
+	key := common.GenerateAssetKey("transfers", transfer.Reference, "payment-proof", contentType)
+	signedURL, err := s.objStorage.GetPresignedUrl(ctx, key, contentType)
 	if err != nil {
-		return createPaymentProofSignedUrlResponse{}, common.TranslateDBError(err)
+		return createPaymentProofSignedUrlResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
 	}
 
 	return createPaymentProofSignedUrlResponse{
-		SignedURL: signedUrl,
-		Key: key,
+		SignedURL:   signedURL,
+		Key:         key,
+		ContentType: contentType,
 	}, nil
 }
 
 func (s *Service) ConfirmPaymentProof(ctx context.Context, body confirmPaymentProofRequest) error {
-	
 	transfer, err := s.queries.GetTransferByReference(ctx, body.Reference)
 	if err != nil {
 		return common.TranslateDBError(err)
 	}
-
 	if transfer.Status != db.TransferStatusPENDINGPAYMENT {
 		return fmt.Errorf("%w: transfer is not pending payment", httpx.BadRequestError)
 	}
-	
-	if transfer.PaymentProofKey != nil && *transfer.PaymentProofKey != body.Key {
-		return fmt.Errorf("%w: payment proof key is incorrect", httpx.BadRequestError)
+
+	prefix := fmt.Sprintf("transfers/%s/payment-proof/", body.Reference)
+	if !strings.HasPrefix(body.Key, prefix) {
+		return fmt.Errorf("%w: payment proof key is invalid for this transfer", httpx.BadRequestError)
 	}
 
-	exists, err := s.objStorage.DoesObjectExist(ctx, body.Key)
-	if err != nil {
-		return fmt.Errorf("%w: Failed to verify payment proof", httpx.InternalServerError)
-	}
-	if !exists {
-		return fmt.Errorf("%w: Payment proof has not been uploaded", httpx.BadRequestError)
+	if err := s.objStorage.ValidatePaymentProof(ctx, body.Key); err != nil {
+		if errors.Is(err, storage.ErrObjectNotFound) ||
+			errors.Is(err, storage.ErrObjectTooLarge) ||
+			errors.Is(err, storage.ErrInvalidImageType) {
+			return fmt.Errorf("%w: %s", httpx.BadRequestError, err.Error())
+		}
+		s.logger.Error("failed to validate payment proof", "error", err)
+		return fmt.Errorf("%w", httpx.InternalServerError)
 	}
 
 	if err := s.queries.SetPaymentProofKey(ctx, db.SetPaymentProofKeyParams{
-		Reference: body.Reference,
+		Reference:       body.Reference,
 		PaymentProofKey: &body.Key,
 	}); err != nil {
 		return common.TranslateDBError(err)
 	}
-
 	return nil
 }

@@ -63,7 +63,7 @@ func (c *Controller) createPaymentProofSignedUrl(w http.ResponseWriter, r *http.
 		return
 	}
 
-	resp, err := c.svc.CreatePaymentProofSignedUrl(r.Context(), body.Reference)
+	resp, err := c.svc.CreatePaymentProofSignedUrl(r.Context(), body.Reference, body.ContentType)
 	if err != nil {
 		httpx.WriteError(w, httpx.StatusFromError(err), err)
 		return

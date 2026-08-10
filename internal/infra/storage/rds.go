@@ -1,9 +1,11 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"cnmt/internal/common/env"
@@ -16,15 +18,18 @@ import (
 	"github.com/aws/smithy-go"
 )
 
+const MaxPaymentProofBytes int64 = 10 << 20 // 10 MiB
 
-type ContentType string
+var AllowedImageTypes = map[string]bool{
+	"image/jpeg": true,
+	"image/jpg":  true,
+	"image/png":  true,
+}
 
-const (
-	ContentTypeImage = "image/png"
-	ContentTypeVideo = "video/mp4"
-	ContentTypeAudio = "audio/mpeg"
-	ContentTypeDocument = "application/pdf"
-	ContentTypeOther = "application/octet-stream"
+var (
+	ErrObjectNotFound   = errors.New("payment proof has not been uploaded")
+	ErrObjectTooLarge   = errors.New("payment proof exceeds the 10MB limit")
+	ErrInvalidImageType = errors.New("payment proof must be a jpeg or png image")
 )
 
 type ObjStorage struct {
@@ -56,9 +61,8 @@ func NewObjStorage(urlTTL time.Duration) (*ObjStorage, error) {
 }
 
 func (o *ObjStorage) GetPresignedUrl(ctx context.Context, key, contentType string) (string, error) {
-	
 	presignClient := s3.NewPresignClient(o.client)
-	presignedResult, err := presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
+	returnValue, err := presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(o.bucket),
 		Key:         aws.String(key),
 		ContentType: aws.String(contentType),
@@ -66,27 +70,62 @@ func (o *ObjStorage) GetPresignedUrl(ctx context.Context, key, contentType strin
 	if err != nil {
 		return "", err
 	}
-	return presignedResult.URL, nil
+	return returnValue.URL, nil
 }
 
-func (o *ObjStorage) DoesObjectExist(ctx context.Context, key string) (bool, error) {
-	_, err := o.client.HeadObject(ctx, &s3.HeadObjectInput{
+func (o *ObjStorage) ValidatePaymentProof(ctx context.Context, key string) error {
+	head, err := o.client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(o.bucket),
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		var nsk *types.NotFound
-		if errors.As(err, &nsk) {
-			return false, nil
+		if isNotFound(err) {
+			return ErrObjectNotFound
 		}
-		var apiErr smithy.APIError
-		if errors.As(err, &apiErr) {
-			switch apiErr.ErrorCode() {
-			case "NotFound", "NoSuchKey", "404":
-				return false, nil
-			}
-		}
-		return false, err
+		return err
 	}
-	return true, nil
+	if head.ContentLength == nil || *head.ContentLength == 0 {
+		return ErrObjectNotFound
+	}
+	if *head.ContentLength > MaxPaymentProofBytes {
+		return ErrObjectTooLarge
+	}
+
+	obj, err := o.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(o.bucket),
+		Key:    aws.String(key),
+		Range:  aws.String("bytes=0-15"),
+	})
+	if err != nil {
+		if isNotFound(err) {
+			return ErrObjectNotFound
+		}
+		return err
+	}
+	defer obj.Body.Close()
+
+	header, err := io.ReadAll(io.LimitReader(obj.Body, 16))
+	if err != nil {
+		return err
+	}
+	if !isJPEGOrPNG(header) {
+		return ErrInvalidImageType
+	}
+	return nil
+}
+
+func isNotFound(err error) bool {
+	var nsk *types.NotFound
+	if errors.As(err, &nsk) {
+		return true
+	}
+	var apiErr smithy.APIError
+	return errors.As(err, &apiErr) && (apiErr.ErrorCode() == "NotFound" || apiErr.ErrorCode() == "NoSuchKey")
+}
+
+func isJPEGOrPNG(b []byte) bool {
+	if len(b) >= 3 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF {
+		return true
+	}
+	return bytes.HasPrefix(b, []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A})
 }
