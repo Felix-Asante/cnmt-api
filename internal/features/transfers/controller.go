@@ -55,3 +55,18 @@ func (c *Controller) getTransferByReference(w http.ResponseWriter, r *http.Reque
 	}
 	httpx.WriteJSON(w, http.StatusOK, transfer)
 }
+
+func (c *Controller) createPaymentProofSignedUrl(w http.ResponseWriter, r *http.Request) {
+	body, err := httpx.DecodeAndValidate[createPaymentProofSignedUrlRequest](r)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	paymentProofSignedUrl, err := c.svc.CreatePaymentProofSignedUrl(r.Context(), body.Reference)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"signed_url": paymentProofSignedUrl})
+}

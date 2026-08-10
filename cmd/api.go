@@ -27,7 +27,10 @@ func main() {
 
 	app := app.NewApp(dbConn)
 
-	r := app.Run()
+	r, err := app.Run()
+	if err != nil {
+		log.Fatalf("failed to run app: %v", err)
+	}
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf("%s:%s", env.GetString("HOST", ""), env.GetString("PORT", "8080")),

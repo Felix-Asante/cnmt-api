@@ -79,6 +79,16 @@ type getTransferResponse struct {
 	CreatedAt           time.Time               `json:"created_at"`
 }
 
+
+type createPaymentProofSignedUrlRequest struct {
+	Reference   string `json:"reference" validate:"required"`
+}
+
+type createPaymentProofSignedUrlResponse struct {
+	SignedURL   string `json:"signed_url"`
+	ContentType string `json:"content_type"`
+}
+
 func mapTransferToDTO(transfer db.GetTransferByReferenceRow) (getTransferResponse, error) {
 	amountSent, err := common.PgNumericToDecimal(transfer.AmountSent)
 	if err != nil {

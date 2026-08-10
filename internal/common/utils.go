@@ -39,3 +39,19 @@ func PgUuidToUuid(id pgtype.UUID) uuid.UUID {
 	}
 	return uuid.UUID(id.Bytes)
 }
+
+func GenerateAssetKey(folder,key,dst,contentType string) string {
+	ext := "jpg"
+	switch contentType {
+	case "image/png":
+		ext = "png"
+	case "image/jpeg", "image/jpg":
+		ext = "jpg"
+	}
+
+	var b [4]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("%s/%s/%s.%s", folder, key, uuid.New().String()[:8], ext)
+	}
+	return fmt.Sprintf("%s/%s/%s/%x.%s", folder, key, dst, b, ext)
+}

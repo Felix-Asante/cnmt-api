@@ -18,6 +18,7 @@ const (
 	pgNotNullViolation    = "23502"
 	pgForeignKeyViolation = "23503"
 	pgCheckViolation      = "23514"
+	
 )
 
 func TranslateDBError(err error) error {

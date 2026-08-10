@@ -1,12 +1,16 @@
 package app
 
 import (
+	"log/slog"
+	"os"
 	"time"
 
+	"cnmt/internal/common/env"
 	"cnmt/internal/common/httpx"
 	"cnmt/internal/features/countries"
 	"cnmt/internal/features/transfers"
 	"cnmt/internal/infra/db"
+	"cnmt/internal/infra/storage"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -24,9 +28,28 @@ func NewApp(dbConn *pgxpool.Pool) (*AppConfig) {
 	}
 }
 
-func (app *AppConfig) Run() *chi.Mux {
+func (app *AppConfig) Run() (*chi.Mux, error) {
 	r := chi.NewRouter()
+
+	level := slog.LevelInfo
+	if env.GetString("LOG_LEVEL", "info") == "debug" {
+		level = slog.LevelDebug
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: level,
+	}))
+	slog.SetDefault(logger)
+
+	urlTTL := time.Duration(env.GetInt("OBJECT_STORAGE_PRESIGNED_URL_EXPIRATION", 3600)) * time.Second
+
+	objStorage, err := storage.NewObjStorage(urlTTL)
+	if err != nil {
+		return nil, err
+	}
+
 	httpx.InitValidator()
+
 
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -43,15 +66,26 @@ func (app *AppConfig) Run() *chi.Mux {
 		MaxAge:           300,
 	  }))
 
-	  initRoutes(r,app.dbConn)
+	  config := RoutesConfig{
+		dbConn: app.dbConn,
+		objStorage: objStorage,
+		logger: logger,
+	  }
 
-	return r
+	  initRoutes(r, config)
+
+	return r, nil
 }
 
-func initRoutes(r *chi.Mux, dbConn *pgxpool.Pool) {
-	dbQueries := db.New(dbConn)
-	
-	transferCtrl := transfers.NewController(transfers.NewService(dbConn, dbQueries))
+type RoutesConfig struct {
+	dbConn *pgxpool.Pool
+	objStorage *storage.ObjStorage
+	logger *slog.Logger
+}
+func initRoutes(r *chi.Mux, config RoutesConfig) {
+	dbQueries := db.New(config.dbConn)
+
+	transferCtrl := transfers.NewController(transfers.NewService(config.dbConn, dbQueries, config.objStorage, config.logger))
 	countryCtrl := countries.NewController(countries.NewService(dbQueries))
 
 	r.Route("/api/v1", func(r chi.Router) {

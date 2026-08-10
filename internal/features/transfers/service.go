@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"cnmt/internal/common"
 	"cnmt/internal/common/httpx"
 	"cnmt/internal/infra/db"
+	"cnmt/internal/infra/storage"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -24,10 +26,13 @@ import (
 type Service struct {
 	db      *pgxpool.Pool
 	queries *db.Queries
+	objStorage *storage.ObjStorage
+	logger *slog.Logger
 }
 
-func NewService(db *pgxpool.Pool, queries *db.Queries) *Service {
-	return &Service{db: db, queries: queries}
+
+func NewService(db *pgxpool.Pool, queries *db.Queries, objStorage *storage.ObjStorage, logger *slog.Logger) *Service {
+	return &Service{db: db, queries: queries, objStorage: objStorage, logger: logger}
 }
 
 func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest, idemKey string) (createTransferResponse, error) {
@@ -39,6 +44,7 @@ func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest
 
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
+		s.logger.Error("failed to begin transaction", "error", err)
 		return createTransferResponse{}, common.TranslateDBError(err)
 	}
 	defer tx.Rollback(ctx)
@@ -53,6 +59,7 @@ func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest
 	})
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
+			s.logger.Error("failed to insert idempotency key", "error", err)
 			return createTransferResponse{}, common.TranslateDBError(err)
 		}
 
@@ -61,6 +68,7 @@ func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest
 			Key:     idemKey,
 		})
 		if getErr != nil {
+			s.logger.Error("failed to get idempotency key", "error", getErr)
 			return createTransferResponse{}, common.TranslateDBError(getErr)
 		}
 		if existing.RequestHash != reqHash {
@@ -69,6 +77,7 @@ func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest
 		if existing.Status == "completed" {
 			var resp createTransferResponse
 			if err := json.Unmarshal(existing.ResponseBody, &resp); err != nil {
+				s.logger.Error("failed to unmarshal idempotency key response body", "error", err)
 				return createTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
 			}
 			return resp, nil
@@ -78,11 +87,13 @@ func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest
 
 	resp, err := s.createTransfer(ctx, qtx, body)
 	if err != nil {
+		s.logger.Error("failed to create transfer", "error", err)
 		return createTransferResponse{}, err
 	}
 
 	raw, err := json.Marshal(resp)
 	if err != nil {
+		s.logger.Error("failed to marshal transfer response", "error", err)
 		return createTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
 	}
 	code := int32(http.StatusCreated)
@@ -93,10 +104,12 @@ func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest
 		ResponseBody: raw,
 		TransferID:   common.UuidToPgtype(resp.TransferID),
 	}); err != nil {
+		s.logger.Error("failed to complete idempotency key", "error", err)
 		return createTransferResponse{}, common.TranslateDBError(err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
+		s.logger.Error("failed to commit transaction", "error", err)
 		return createTransferResponse{}, common.TranslateDBError(err)
 	}
 
@@ -113,26 +126,31 @@ func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body create
 		DestinationCountryID: body.DestinationCountryID,
 	})
 	if err != nil {
+		s.logger.Error("failed to get active route by countries", "error", err)
 		return createTransferResponse{}, common.TranslateDBError(err)
 	}
 
 	amtPaid, err := decimal.NewFromString(body.AmountSent)
-	if err != nil {
+	if err != nil {	
+		s.logger.Error("failed to convert amount sent to decimal", "error", err)
 		return createTransferResponse{}, fmt.Errorf("%w: amount sent is not valid", httpx.BadRequestError)
 	}
 	amtPaid = common.RoundMoney(amtPaid)
 
 	if err := validateAmountPaid(amtPaid, route.MinTransferAmount, route.MaxTransferAmount); err != nil {
+		s.logger.Error("failed to validate amount paid", "error", err)
 		return createTransferResponse{}, err
 	}
 
 	rate, err := common.PgNumericToDecimal(route.DefaultExchangeRate)
 	if err != nil || !rate.IsPositive() {
+		s.logger.Error("failed to convert exchange rate to decimal", "error", err)
 		return createTransferResponse{}, fmt.Errorf("%w: exchange rate is not configured", httpx.BadRequestError)
 	}
 
 	calculatedFee, err := calculateFee(amtPaid, route.FeeType, route.Fee)
 	if err != nil {
+		s.logger.Error("failed to calculate fee", "error", err)
 		return createTransferResponse{}, err
 	}
 
@@ -143,23 +161,28 @@ func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body create
 
 	networkID, bankID, mobileNumber, bankAccount, err := receivingDetails(body.Recipient)
 	if err != nil {
+		s.logger.Error("failed to get receiving details", "error", err)
 		return createTransferResponse{}, err
 	}
 
 	if err := validatePaymentChannel(ctx, q, body.DestinationCountryID, body.Recipient.ReceivingMethod, networkID, bankID); err != nil {
+		s.logger.Error("failed to validate payment channel", "error", err)
 		return createTransferResponse{}, err
 	}
 
 	feeNumeric, err := common.DecimalToPgNumeric(calculatedFee)
 	if err != nil {
+		s.logger.Error("failed to convert fee to pgnumeric", "error", err)
 		return createTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
 	}
 	sentNumeric, err := common.DecimalToPgNumeric(amtPaid)
 	if err != nil {
+		s.logger.Error("failed to convert amount sent to pgnumeric", "error", err)
 		return createTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
 	}
 	receivedNumeric, err := common.DecimalToPgNumeric(amtToReceive)
 	if err != nil {
+		s.logger.Error("failed to convert amount received to pgnumeric", "error", err)
 		return createTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
 	}
 
@@ -190,6 +213,7 @@ func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body create
 		ExpiresAt:                  expiresAt,
 	})
 	if err != nil {
+		s.logger.Error("failed to create transfer", "error", err)
 		return createTransferResponse{}, common.TranslateDBError(err)
 	}
 
@@ -316,12 +340,37 @@ func (s *Service) GetByReference(ctx context.Context, reference string) (getTran
 
 	transfer, err := s.queries.GetTransferByReference(ctx, reference)
 	if err != nil {
+		s.logger.Error("failed to get transfer by reference", "error", err)
 		return getTransferResponse{}, common.TranslateDBError(err)
 	}
 
 	transferDTO, err := mapTransferToDTO(transfer)
 	if err != nil {
+		s.logger.Error("failed to map transfer to dto", "error", err)
 		return getTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
 	}
 	return transferDTO, nil
+}
+
+func (s *Service) CreatePaymentProofSignedUrl(ctx context.Context, reference string) (string, error) {
+	if reference == "" {
+		return "", fmt.Errorf("%w: reference is required", httpx.BadRequestError)
+	}
+
+	transfer, err := s.queries.GetTransferByReference(ctx, reference)
+	if err != nil {
+		return "", common.TranslateDBError(err)
+	}
+
+	if transfer.Status != db.TransferStatusPENDINGPAYMENT {
+		return "", fmt.Errorf("%w: transfer is not pending payment", httpx.BadRequestError)
+	}
+
+	key := common.GenerateAssetKey("transfers", transfer.Reference, "payment-proof", storage.ContentTypeImage)
+	signedUrl, err := s.objStorage.GetPresignedUrl(ctx, key, storage.ContentTypeImage)
+	if err != nil {
+		return "", common.TranslateDBError(err)
+	}
+
+	return signedUrl, nil
 }
