@@ -86,7 +86,7 @@ type createPaymentProofSignedUrlRequest struct {
 
 type createPaymentProofSignedUrlResponse struct {
 	SignedURL   string `json:"signed_url"`
-	ContentType string `json:"content_type"`
+	Key string `json:"key"`
 }
 
 func mapTransferToDTO(transfer db.GetTransferByReferenceRow) (getTransferResponse, error) {

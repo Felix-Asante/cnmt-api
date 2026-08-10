@@ -352,25 +352,28 @@ func (s *Service) GetByReference(ctx context.Context, reference string) (getTran
 	return transferDTO, nil
 }
 
-func (s *Service) CreatePaymentProofSignedUrl(ctx context.Context, reference string) (string, error) {
+func (s *Service) CreatePaymentProofSignedUrl(ctx context.Context, reference string) (createPaymentProofSignedUrlResponse, error) {
 	if reference == "" {
-		return "", fmt.Errorf("%w: reference is required", httpx.BadRequestError)
+		return createPaymentProofSignedUrlResponse{}, fmt.Errorf("%w: reference is required", httpx.BadRequestError)
 	}
 
 	transfer, err := s.queries.GetTransferByReference(ctx, reference)
 	if err != nil {
-		return "", common.TranslateDBError(err)
+		return createPaymentProofSignedUrlResponse{}, common.TranslateDBError(err)
 	}
 
 	if transfer.Status != db.TransferStatusPENDINGPAYMENT {
-		return "", fmt.Errorf("%w: transfer is not pending payment", httpx.BadRequestError)
+		return createPaymentProofSignedUrlResponse{}, fmt.Errorf("%w: transfer is not pending payment", httpx.BadRequestError)
 	}
 
 	key := common.GenerateAssetKey("transfers", transfer.Reference, "payment-proof", storage.ContentTypeImage)
 	signedUrl, err := s.objStorage.GetPresignedUrl(ctx, key, storage.ContentTypeImage)
 	if err != nil {
-		return "", common.TranslateDBError(err)
+		return createPaymentProofSignedUrlResponse{}, common.TranslateDBError(err)
 	}
 
-	return signedUrl, nil
+	return createPaymentProofSignedUrlResponse{
+		SignedURL: signedUrl,
+		Key: key,
+	}, nil
 }
