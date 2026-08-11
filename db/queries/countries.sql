@@ -4,9 +4,10 @@ FROM countries
 WHERE id = $1
     AND is_active = TRUE
     AND deleted_at IS NULL;
--- name: ListCountries :many
+-- name: GetAllCountries :many
 SELECT *
 FROM countries
+WHERE deleted_at IS NULL
 ORDER BY name;
 -- name: CreateCountry :one
 INSERT INTO countries (name, iso_code, flag, is_active)

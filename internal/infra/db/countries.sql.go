@@ -162,6 +162,45 @@ func (q *Queries) GetActiveRouteByCountries(ctx context.Context, arg GetActiveRo
 	return i, err
 }
 
+const getAllCountries = `-- name: GetAllCountries :many
+SELECT id, name, iso_code, flag, is_active, currency_name, currency_code, currency_symbol, created_at, updated_at, deleted_at
+FROM countries
+WHERE deleted_at IS NULL
+ORDER BY name
+`
+
+func (q *Queries) GetAllCountries(ctx context.Context) ([]Country, error) {
+	rows, err := q.db.Query(ctx, getAllCountries)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Country{}
+	for rows.Next() {
+		var i Country
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.IsoCode,
+			&i.Flag,
+			&i.IsActive,
+			&i.CurrencyName,
+			&i.CurrencyCode,
+			&i.CurrencySymbol,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCountryByID = `-- name: GetCountryByID :one
 SELECT id, name, iso_code, flag, is_active, currency_name, currency_code, currency_symbol, created_at, updated_at, deleted_at
 FROM countries
@@ -231,44 +270,6 @@ func (q *Queries) GetPaymentChannelByID(ctx context.Context, id uuid.UUID) (Paym
 		&i.DeletedAt,
 	)
 	return i, err
-}
-
-const listCountries = `-- name: ListCountries :many
-SELECT id, name, iso_code, flag, is_active, currency_name, currency_code, currency_symbol, created_at, updated_at, deleted_at
-FROM countries
-ORDER BY name
-`
-
-func (q *Queries) ListCountries(ctx context.Context) ([]Country, error) {
-	rows, err := q.db.Query(ctx, listCountries)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Country{}
-	for rows.Next() {
-		var i Country
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.IsoCode,
-			&i.Flag,
-			&i.IsActive,
-			&i.CurrencyName,
-			&i.CurrencyCode,
-			&i.CurrencySymbol,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const updateCountry = `-- name: UpdateCountry :one

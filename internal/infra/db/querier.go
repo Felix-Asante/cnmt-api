@@ -19,6 +19,7 @@ type Querier interface {
 	DeleteCountry(ctx context.Context, id int64) error
 	GetActivePCByCountryTypeAndID(ctx context.Context, arg GetActivePCByCountryTypeAndIDParams) (PaymentChannel, error)
 	GetActiveRouteByCountries(ctx context.Context, arg GetActiveRouteByCountriesParams) (Route, error)
+	GetAllCountries(ctx context.Context) ([]Country, error)
 	GetAllTransfers(ctx context.Context, arg GetAllTransfersParams) ([]GetAllTransfersRow, error)
 	GetAllTransfersCount(ctx context.Context, arg GetAllTransfersCountParams) (int64, error)
 	GetCountryByID(ctx context.Context, id int64) (Country, error)
@@ -29,7 +30,6 @@ type Querier interface {
 	GetTransferByReference(ctx context.Context, reference string) (GetTransferByReferenceRow, error)
 	GetTransferEventsByTransferID(ctx context.Context, transferID uuid.UUID) ([]TransferEvent, error)
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) (IdempotencyKey, error)
-	ListCountries(ctx context.Context) ([]Country, error)
 	SetPaymentProofKey(ctx context.Context, arg SetPaymentProofKeyParams) error
 	TransitionTransferStatus(ctx context.Context, arg TransitionTransferStatusParams) (int64, error)
 	UpdateCountry(ctx context.Context, arg UpdateCountryParams) (Country, error)

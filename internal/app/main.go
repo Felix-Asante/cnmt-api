@@ -86,11 +86,12 @@ func initRoutes(r *chi.Mux, config RoutesConfig) {
 	dbQueries := db.New(config.dbConn)
 
 	transferCtrl := transfers.NewController(transfers.NewService(config.dbConn, dbQueries, config.objStorage, config.logger))
-	countryCtrl := countries.NewController(countries.NewService(dbQueries))
+	countryCtrl := countries.NewController(countries.NewService(dbQueries, config.logger))
 
 	r.Route("/api/v1", func(r chi.Router) {
 		transferCtrl.Routes(r)
 		transferCtrl.AdminRoutes(r)
 		countryCtrl.Routes(r)
+		countryCtrl.AdminRoutes(r)
 	})
 }
