@@ -100,6 +100,188 @@ func (q *Queries) CreateTransfer(ctx context.Context, arg CreateTransferParams) 
 	return id, err
 }
 
+const getAllTransfers = `-- name: GetAllTransfers :many
+SELECT t.id, t.reference, t.route_id, t.status, t.sender_phone, t.receiving_account_name, t.receiving_mobile_money_number, t.receiving_method, t.receiving_money_network_id, t.receiving_bank_id, t.receiving_bank_account, t.payment_proof_key, t.exchange_rate, t.fee, t.amount_sent, t.amount_received, t.notes, t.expires_at, t.created_at, t.updated_at, t.deleted_at,
+    src.id AS source_country_id,
+    src.name AS source_country_name,
+    src.flag AS source_flag,
+    src.currency_symbol AS source_currency_symbol,
+    dst.id AS destination_country_id,
+    dst.name AS destination_country_name,
+    dst.flag AS destination_flag,
+    dst.currency_symbol AS destination_currency_symbol,
+    network.name AS receiving_network_name,
+    bank.name AS receiving_bank_name
+FROM transfers t
+    JOIN routes r ON r.id = t.route_id
+    JOIN countries src ON src.id = r.source_country_id
+    JOIN countries dst ON dst.id = r.destination_country_id
+    LEFT JOIN payment_channels network ON network.id = t.receiving_money_network_id
+    LEFT JOIN payment_channels bank ON bank.id = t.receiving_bank_id
+WHERE t.deleted_at IS NULL
+    AND t.sender_phone = COALESCE(NULLIF($1::text, ''), t.sender_phone)
+    AND COALESCE(t.receiving_mobile_money_number, '') = COALESCE(
+        NULLIF($2::text, ''),
+        COALESCE(t.receiving_mobile_money_number, '')
+    )
+    AND t.status = COALESCE(NULLIF($3::text, '')::transfer_status, t.status)
+    AND t.reference = COALESCE(NULLIF($4::text, ''), t.reference)
+    AND t.route_id = COALESCE(
+        NULLIF(
+            $5::uuid,
+            '00000000-0000-0000-0000-000000000000'::uuid
+        ),
+        t.route_id
+    )
+ORDER BY t.created_at DESC
+LIMIT $6 OFFSET $7
+`
+
+type GetAllTransfersParams struct {
+	Column1 string
+	Column2 string
+	Column3 string
+	Column4 string
+	Column5 uuid.UUID
+	Limit   int32
+	Offset  int32
+}
+
+type GetAllTransfersRow struct {
+	ID                         uuid.UUID
+	Reference                  string
+	RouteID                    uuid.UUID
+	Status                     TransferStatus
+	SenderPhone                string
+	ReceivingAccountName       string
+	ReceivingMobileMoneyNumber *string
+	ReceivingMethod            ReceivingMethods
+	ReceivingMoneyNetworkID    pgtype.UUID
+	ReceivingBankID            pgtype.UUID
+	ReceivingBankAccount       *string
+	PaymentProofKey            *string
+	ExchangeRate               pgtype.Numeric
+	Fee                        pgtype.Numeric
+	AmountSent                 pgtype.Numeric
+	AmountReceived             pgtype.Numeric
+	Notes                      *string
+	ExpiresAt                  time.Time
+	CreatedAt                  time.Time
+	UpdatedAt                  time.Time
+	DeletedAt                  pgtype.Timestamptz
+	SourceCountryID            int64
+	SourceCountryName          string
+	SourceFlag                 string
+	SourceCurrencySymbol       string
+	DestinationCountryID       int64
+	DestinationCountryName     string
+	DestinationFlag            string
+	DestinationCurrencySymbol  string
+	ReceivingNetworkName       *string
+	ReceivingBankName          *string
+}
+
+func (q *Queries) GetAllTransfers(ctx context.Context, arg GetAllTransfersParams) ([]GetAllTransfersRow, error) {
+	rows, err := q.db.Query(ctx, getAllTransfers,
+		arg.Column1,
+		arg.Column2,
+		arg.Column3,
+		arg.Column4,
+		arg.Column5,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAllTransfersRow{}
+	for rows.Next() {
+		var i GetAllTransfersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Reference,
+			&i.RouteID,
+			&i.Status,
+			&i.SenderPhone,
+			&i.ReceivingAccountName,
+			&i.ReceivingMobileMoneyNumber,
+			&i.ReceivingMethod,
+			&i.ReceivingMoneyNetworkID,
+			&i.ReceivingBankID,
+			&i.ReceivingBankAccount,
+			&i.PaymentProofKey,
+			&i.ExchangeRate,
+			&i.Fee,
+			&i.AmountSent,
+			&i.AmountReceived,
+			&i.Notes,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.SourceCountryID,
+			&i.SourceCountryName,
+			&i.SourceFlag,
+			&i.SourceCurrencySymbol,
+			&i.DestinationCountryID,
+			&i.DestinationCountryName,
+			&i.DestinationFlag,
+			&i.DestinationCurrencySymbol,
+			&i.ReceivingNetworkName,
+			&i.ReceivingBankName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAllTransfersCount = `-- name: GetAllTransfersCount :one
+SELECT COUNT(*)
+FROM transfers t
+WHERE t.deleted_at IS NULL
+    AND t.sender_phone = COALESCE(NULLIF($1::text, ''), t.sender_phone)
+    AND COALESCE(t.receiving_mobile_money_number, '') = COALESCE(
+        NULLIF($2::text, ''),
+        COALESCE(t.receiving_mobile_money_number, '')
+    )
+    AND t.status = COALESCE(NULLIF($3::text, '')::transfer_status, t.status)
+    AND t.reference = COALESCE(NULLIF($4::text, ''), t.reference)
+    AND t.route_id = COALESCE(
+        NULLIF(
+            $5::uuid,
+            '00000000-0000-0000-0000-000000000000'::uuid
+        ),
+        t.route_id
+    )
+`
+
+type GetAllTransfersCountParams struct {
+	Column1 string
+	Column2 string
+	Column3 string
+	Column4 string
+	Column5 uuid.UUID
+}
+
+func (q *Queries) GetAllTransfersCount(ctx context.Context, arg GetAllTransfersCountParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getAllTransfersCount,
+		arg.Column1,
+		arg.Column2,
+		arg.Column3,
+		arg.Column4,
+		arg.Column5,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getTransferByReference = `-- name: GetTransferByReference :one
 SELECT t.id, t.reference, t.route_id, t.status, t.sender_phone, t.receiving_account_name, t.receiving_mobile_money_number, t.receiving_method, t.receiving_money_network_id, t.receiving_bank_id, t.receiving_bank_account, t.payment_proof_key, t.exchange_rate, t.fee, t.amount_sent, t.amount_received, t.notes, t.expires_at, t.created_at, t.updated_at, t.deleted_at,
     src.id AS source_country_id,

@@ -18,6 +18,8 @@ type Querier interface {
 	DeleteCountry(ctx context.Context, id int64) error
 	GetActivePCByCountryTypeAndID(ctx context.Context, arg GetActivePCByCountryTypeAndIDParams) (PaymentChannel, error)
 	GetActiveRouteByCountries(ctx context.Context, arg GetActiveRouteByCountriesParams) (Route, error)
+	GetAllTransfers(ctx context.Context, arg GetAllTransfersParams) ([]GetAllTransfersRow, error)
+	GetAllTransfersCount(ctx context.Context, arg GetAllTransfersCountParams) (int64, error)
 	GetCountryByID(ctx context.Context, id int64) (Country, error)
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	GetPaymentChannelByCountryID(ctx context.Context, countryID int64) (PaymentChannel, error)

@@ -41,6 +41,22 @@ func (c *Controller) createTransfer(w http.ResponseWriter, r *http.Request) {
 }
 
 
+func (c *Controller) getAllTransfers(w http.ResponseWriter, r *http.Request) {
+	query, err := parseGetAllTransfersQuery(r)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+
+	resp, err := c.svc.GetAllTransfers(r.Context(), query)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+
+	httpx.WriteJSON(w, http.StatusOK, resp)
+}
+
 func (c *Controller) getTransferByReference(w http.ResponseWriter, r *http.Request) {
 	reference := chi.URLParam(r, "reference")
 	if reference == "" {

@@ -54,6 +54,13 @@ func InitValidator() {
 	}
 }
 
+func Validate[T any](v T) (T, error) {
+	if err := validate.Struct(v); err != nil {
+		return v, translateValidationError(err)
+	}
+	return v, nil
+}
+
 func DecodeAndValidate[T any](r *http.Request) (T, error) {
 	var body T
 	dec := json.NewDecoder(r.Body)

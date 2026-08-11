@@ -414,3 +414,85 @@ func (s *Service) ConfirmPaymentProof(ctx context.Context, body confirmPaymentPr
 	}
 	return nil
 }
+
+func (s *Service) GetAllTransfers(ctx context.Context, body getAllTransfersRequest) (getAllTransfersResponse, error) {
+	const (
+		defaultPage  = 1
+		defaultLimit = 10
+		maxLimit     = 100
+	)
+
+	page := defaultPage
+	if body.Page != nil {
+		page = max(*body.Page, 1)
+	}
+
+	limit := defaultLimit
+	if body.Limit != nil {
+		limit = min(max(*body.Limit, 1), maxLimit)
+	}
+
+	offset := (page - 1) * limit
+
+	filters := db.GetAllTransfersCountParams{
+		Column1: strOrEmpty(body.SenderPhone),
+		Column2: strOrEmpty(body.RecipientPhone),
+		Column3: statusOrEmpty(body.Status),
+		Column4: strOrEmpty(body.Reference),
+		Column5: uuidOrNil(body.RouteID),
+	}
+
+	transfers, err := s.queries.GetAllTransfers(ctx, db.GetAllTransfersParams{
+		Column1: filters.Column1,
+		Column2: filters.Column2,
+		Column3: filters.Column3,
+		Column4: filters.Column4,
+		Column5: filters.Column5,
+		Limit:   int32(limit),
+		Offset:  int32(offset),
+	})
+	if err != nil {
+		return getAllTransfersResponse{}, common.TranslateDBError(err)
+	}
+
+	total, err := s.queries.GetAllTransfersCount(ctx, filters)
+	if err != nil {
+		return getAllTransfersResponse{}, common.TranslateDBError(err)
+	}
+
+	mappedTransfers := make([]getTransferResponse, len(transfers))
+	for i, transfer := range transfers {
+		mappedTransfers[i], err = mapListTransferToDTO(transfer)
+		if err != nil {
+			return getAllTransfersResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
+		}
+	}
+
+	return getAllTransfersResponse{
+		Transfers: mappedTransfers,
+		Total:     int(total),
+		Page:      page,
+		Limit:     limit,
+	}, nil
+}
+
+func strOrEmpty(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func statusOrEmpty(s *db.TransferStatus) string {
+	if s == nil {
+		return ""
+	}
+	return string(*s)
+}
+
+func uuidOrNil(u *uuid.UUID) uuid.UUID {
+	if u == nil {
+		return uuid.Nil
+	}
+	return *u
+}

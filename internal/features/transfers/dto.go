@@ -7,6 +7,7 @@ import (
 	"cnmt/internal/infra/db"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 )
 
@@ -45,8 +46,9 @@ type createTransferResponse struct {
 type countryDTO struct {
 	ID             int64  `json:"id"`
 	Name           string `json:"name"`
-	CurrencyCode   string `json:"currency_code"`
-	CurrencySymbol string `json:"currency_symbol"`
+	Flag           string `json:"flag,omitempty"`
+	CurrencyCode   string `json:"currency_code,omitempty"`
+	CurrencySymbol string `json:"currency_symbol,omitempty"`
 }
 
 type routeDTO struct {
@@ -97,7 +99,122 @@ type confirmPaymentProofRequest struct {
 	Key       string `json:"key" validate:"required,min=1"`
 }
 
+type getAllTransfersRequest struct {
+	SenderPhone    *string              `validate:"omitempty,e164"`
+	RecipientPhone *string              `validate:"omitempty,e164"`
+	RouteID        *uuid.UUID           `validate:"omitempty,uuid"`
+	Reference      *string              `validate:"omitempty,min=1,max=100"`
+	Status         *db.TransferStatus   `validate:"omitempty,oneof=PENDING_PAYMENT PAYMENT_RECEIVED VERIFYING PROCESSING COMPLETED FAILED CANCELLED"`
+	Page           *int                 `validate:"omitempty,gte=1"`
+	Limit          *int                 `validate:"omitempty,gte=1,lte=100"`
+}
+
+type getAllTransfersResponse struct {
+	Transfers []getTransferResponse `json:"transfers"`
+	Total int `json:"total"`
+	Page int `json:"page"`
+	Limit int `json:"limit"`
+}
+
 func mapTransferToDTO(transfer db.GetTransferByReferenceRow) (getTransferResponse, error) {
+	return mapTransferRowToDTO(transferRowFromReference(transfer))
+}
+
+func mapListTransferToDTO(transfer db.GetAllTransfersRow) (getTransferResponse, error) {
+	return mapTransferRowToDTO(transferRowFromList(transfer))
+}
+
+type transferRow struct {
+	Reference                  string
+	Status                     db.TransferStatus
+	SourceCountryID            int64
+	SourceCountryName          string
+	SourceCountryFlag          string
+	SourceCurrencyCode         string
+	SourceCurrencySymbol       string
+	DestinationCountryID       int64
+	DestinationCountryName     string
+	DestinationCountryFlag     string
+	DestinationCurrencyCode    string
+	DestinationCurrencySymbol  string
+	AmountSent                 pgtype.Numeric
+	AmountReceived             pgtype.Numeric
+	ExchangeRate               pgtype.Numeric
+	Fee                        pgtype.Numeric
+	SenderPhone                string
+	PaymentProofKey            *string
+	ReceivingAccountName       string
+	ReceivingMobileMoneyNumber *string
+	ReceivingMethod            db.ReceivingMethods
+	ReceivingNetworkName       *string
+	ReceivingBankName          *string
+	ReceivingBankAccount       *string
+	Notes                      *string
+	ExpiresAt                  time.Time
+	CreatedAt                  time.Time
+}
+
+func transferRowFromReference(row db.GetTransferByReferenceRow) transferRow {
+	return transferRow{
+		Reference:                  row.Reference,
+		Status:                     row.Status,
+		SourceCountryID:            row.SourceCountryID,
+		SourceCountryName:          row.SourceCountryName,
+		SourceCurrencyCode:         row.SourceCurrencyCode,
+		SourceCurrencySymbol:       row.SourceCurrencySymbol,
+		DestinationCountryID:       row.DestinationCountryID,
+		DestinationCountryName:     row.DestinationCountryName,
+		DestinationCurrencyCode:    row.DestinationCurrencyCode,
+		DestinationCurrencySymbol:  row.DestinationCurrencySymbol,
+		AmountSent:                 row.AmountSent,
+		AmountReceived:             row.AmountReceived,
+		ExchangeRate:               row.ExchangeRate,
+		Fee:                        row.Fee,
+		SenderPhone:                row.SenderPhone,
+		PaymentProofKey:            row.PaymentProofKey,
+		ReceivingAccountName:       row.ReceivingAccountName,
+		ReceivingMobileMoneyNumber: row.ReceivingMobileMoneyNumber,
+		ReceivingMethod:            row.ReceivingMethod,
+		ReceivingNetworkName:       row.ReceivingNetworkName,
+		ReceivingBankName:          row.ReceivingBankName,
+		ReceivingBankAccount:       row.ReceivingBankAccount,
+		Notes:                      row.Notes,
+		ExpiresAt:                  row.ExpiresAt,
+		CreatedAt:                  row.CreatedAt,
+	}
+}
+
+func transferRowFromList(row db.GetAllTransfersRow) transferRow {
+	return transferRow{
+		Reference:                  row.Reference,
+		Status:                     row.Status,
+		SourceCountryID:            row.SourceCountryID,
+		SourceCountryName:          row.SourceCountryName,
+		SourceCountryFlag:          row.SourceFlag,
+		SourceCurrencySymbol:       row.SourceCurrencySymbol,
+		DestinationCountryID:       row.DestinationCountryID,
+		DestinationCountryName:     row.DestinationCountryName,
+		DestinationCountryFlag:     row.DestinationFlag,
+		DestinationCurrencySymbol:  row.DestinationCurrencySymbol,
+		AmountSent:                 row.AmountSent,
+		AmountReceived:             row.AmountReceived,
+		ExchangeRate:               row.ExchangeRate,
+		Fee:                        row.Fee,
+		SenderPhone:                row.SenderPhone,
+		PaymentProofKey:            row.PaymentProofKey,
+		ReceivingAccountName:       row.ReceivingAccountName,
+		ReceivingMobileMoneyNumber: row.ReceivingMobileMoneyNumber,
+		ReceivingMethod:            row.ReceivingMethod,
+		ReceivingNetworkName:       row.ReceivingNetworkName,
+		ReceivingBankName:          row.ReceivingBankName,
+		ReceivingBankAccount:       row.ReceivingBankAccount,
+		Notes:                      row.Notes,
+		ExpiresAt:                  row.ExpiresAt,
+		CreatedAt:                  row.CreatedAt,
+	}
+}
+
+func mapTransferRowToDTO(transfer transferRow) (getTransferResponse, error) {
 	amountSent, err := common.PgNumericToDecimal(transfer.AmountSent)
 	if err != nil {
 		return getTransferResponse{}, err
@@ -122,12 +239,14 @@ func mapTransferToDTO(transfer db.GetTransferByReferenceRow) (getTransferRespons
 			SourceCountry: countryDTO{
 				ID:             transfer.SourceCountryID,
 				Name:           transfer.SourceCountryName,
+				Flag:           transfer.SourceCountryFlag,
 				CurrencyCode:   transfer.SourceCurrencyCode,
 				CurrencySymbol: transfer.SourceCurrencySymbol,
 			},
 			DestinationCountry: countryDTO{
 				ID:             transfer.DestinationCountryID,
 				Name:           transfer.DestinationCountryName,
+				Flag:           transfer.DestinationCountryFlag,
 				CurrencyCode:   transfer.DestinationCurrencyCode,
 				CurrencySymbol: transfer.DestinationCurrencySymbol,
 			},
