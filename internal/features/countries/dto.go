@@ -7,6 +7,7 @@ import (
 	"cnmt/internal/infra/db"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 )
 
@@ -26,6 +27,18 @@ type CountryResponse struct {
 type PaymentChannelDTO struct {
 	ID   uuid.UUID `json:"id"`
 	Name string    `json:"name"`
+}
+
+type SourceCountryDTO struct {
+	ID             int64               `json:"id"`
+	Name           string              `json:"name"`
+	ISOCode        string              `json:"iso_code"`
+	Flag           string              `json:"flag"`
+	CurrencyName   string              `json:"currency_name"`
+	CurrencyCode   string              `json:"currency_code"`
+	CurrencySymbol string              `json:"currency_symbol"`
+	Banks          []PaymentChannelDTO `json:"banks"`
+	MobileNetworks []PaymentChannelDTO `json:"mobile_networks"`
 }
 
 type DestCountryResponse struct {
@@ -65,13 +78,35 @@ func mapCountryToResponse(country db.Country) CountryResponse {
 	}
 }
 
+func MapSourceCountries(
+	rows []db.GetAllSourceCountriesRow,
+	channelsByCountry map[int64][]db.GetActivePaymentChannelsByCountryIDsRow,
+) []SourceCountryDTO {
+	out := make([]SourceCountryDTO, len(rows))
+	for i, row := range rows {
+		banks, networks := groupPaymentChannels(channelsByCountry[row.ID])
+		out[i] = SourceCountryDTO{
+			ID:             row.ID,
+			Name:           row.Name,
+			ISOCode:        row.IsoCode,
+			Flag:           row.Flag,
+			CurrencyName:   row.CurrencyName,
+			CurrencyCode:   row.CurrencyCode,
+			CurrencySymbol: row.CurrencySymbol,
+			Banks:          banks,
+			MobileNetworks: networks,
+		}
+	}
+	return out
+}
+
 func mapDestCountriesToResponses(
 	rows []db.GetDestCountriesBySrcCountryIDRow,
 	channelsByCountry map[int64][]db.GetActivePaymentChannelsByCountryIDsRow,
 ) ([]DestCountryResponse, error) {
 	responses := make([]DestCountryResponse, 0, len(rows))
 	for _, row := range rows {
-		resp, err := mapDestCountryToResponse(row, channelsByCountry[row.ID])
+		resp, err := MapDestCountryFromSrcRow(row, channelsByCountry[row.ID])
 		if err != nil {
 			return nil, err
 		}
@@ -80,21 +115,77 @@ func mapDestCountriesToResponses(
 	return responses, nil
 }
 
-func mapDestCountryToResponse(
+func MapDestCountryFromSrcRow(
 	row db.GetDestCountriesBySrcCountryIDRow,
 	channels []db.GetActivePaymentChannelsByCountryIDsRow,
 ) (DestCountryResponse, error) {
-	minAmount, err := common.PgNumericToDecimal(row.MinTransferAmount)
+	return mapDestCountry(
+		row.ID,
+		row.Name,
+		row.IsoCode,
+		row.Flag,
+		row.CurrencyName,
+		row.CurrencyCode,
+		row.CurrencySymbol,
+		row.MinTransferAmount,
+		row.MaxTransferAmount,
+		channels,
+	)
+}
+
+func MapDestCountryFromRouteRow(
+	row db.GetAllActiveRouteDestinationsRow,
+	channels []db.GetActivePaymentChannelsByCountryIDsRow,
+) (DestCountryResponse, error) {
+	return mapDestCountry(
+		row.ID,
+		row.Name,
+		row.IsoCode,
+		row.Flag,
+		row.CurrencyName,
+		row.CurrencyCode,
+		row.CurrencySymbol,
+		row.MinTransferAmount,
+		row.MaxTransferAmount,
+		channels,
+	)
+}
+
+func mapDestCountry(
+	id int64,
+	name, isoCode, flag, currencyName, currencyCode, currencySymbol string,
+	minAmountRaw, maxAmountRaw pgtype.Numeric,
+	channels []db.GetActivePaymentChannelsByCountryIDsRow,
+) (DestCountryResponse, error) {
+	minAmount, err := common.PgNumericToDecimal(minAmountRaw)
 	if err != nil {
 		minAmount = decimal.Zero
 	}
-	maxAmount, err := common.PgNumericToDecimal(row.MaxTransferAmount)
+	maxAmount, err := common.PgNumericToDecimal(maxAmountRaw)
 	if err != nil {
 		maxAmount = decimal.Zero
 	}
 
-	banks := make([]PaymentChannelDTO, 0)
-	networks := make([]PaymentChannelDTO, 0)
+	banks, networks := groupPaymentChannels(channels)
+
+	return DestCountryResponse{
+		ID:                id,
+		Name:              name,
+		ISOCode:           isoCode,
+		Flag:              flag,
+		CurrencyName:      currencyName,
+		CurrencyCode:      currencyCode,
+		CurrencySymbol:    currencySymbol,
+		MinTransferAmount: minAmount,
+		MaxTransferAmount: maxAmount,
+		Banks:             banks,
+		MobileNetworks:    networks,
+	}, nil
+}
+
+func groupPaymentChannels(channels []db.GetActivePaymentChannelsByCountryIDsRow) (banks, networks []PaymentChannelDTO) {
+	banks = make([]PaymentChannelDTO, 0)
+	networks = make([]PaymentChannelDTO, 0)
 	for _, ch := range channels {
 		dto := PaymentChannelDTO{ID: ch.ID, Name: ch.Name}
 		switch ch.ChannelType {
@@ -104,18 +195,5 @@ func mapDestCountryToResponse(
 			networks = append(networks, dto)
 		}
 	}
-
-	return DestCountryResponse{
-		ID:                row.ID,
-		Name:              row.Name,
-		ISOCode:           row.IsoCode,
-		Flag:              row.Flag,
-		CurrencyName:      row.CurrencyName,
-		CurrencyCode:      row.CurrencyCode,
-		CurrencySymbol:    row.CurrencySymbol,
-		MinTransferAmount: minAmount,
-		MaxTransferAmount: maxAmount,
-		Banks:             banks,
-		MobileNetworks:    networks,
-	}, nil
+	return banks, networks
 }

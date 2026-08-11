@@ -82,6 +82,29 @@ WHERE r.source_country_id = $1
     AND src.deleted_at IS NULL
 ORDER BY c.name;
 
+-- name: GetAllActiveRouteDestinations :many
+SELECT r.source_country_id,
+    c.id,
+    c.name,
+    c.iso_code,
+    c.flag,
+    c.currency_name,
+    c.currency_code,
+    c.currency_symbol,
+    r.min_transfer_amount,
+    r.max_transfer_amount
+FROM countries c
+    JOIN routes r ON r.destination_country_id = c.id
+    JOIN countries src ON src.id = r.source_country_id
+WHERE r.is_active = TRUE
+    AND r.deleted_at IS NULL
+    AND c.is_active = TRUE
+    AND c.deleted_at IS NULL
+    AND src.is_active = TRUE
+    AND src.deleted_at IS NULL
+ORDER BY r.source_country_id,
+    c.name;
+
 -- name: GetActivePaymentChannelsByCountryIDs :many
 SELECT id,
     name,
@@ -93,3 +116,18 @@ WHERE country_id = ANY($1::bigint [])
     AND deleted_at IS NULL
 ORDER BY channel_type,
     name;
+-- name: GetAllSourceCountries :many
+SELECT DISTINCT c.id,
+    c.name,
+    c.iso_code,
+    c.flag,
+    c.currency_name,
+    c.currency_code,
+    c.currency_symbol
+FROM countries c
+    JOIN routes r ON r.source_country_id = c.id
+WHERE c.is_active = TRUE
+    AND c.deleted_at IS NULL
+    AND r.is_active = TRUE
+    AND r.deleted_at IS NULL
+ORDER BY c.name;

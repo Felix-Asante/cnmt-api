@@ -204,3 +204,12 @@ func (c *Controller) cancelTransfer(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, http.StatusOK, resp)
 }
+
+func (c *Controller) getTransferOptions(w http.ResponseWriter, r *http.Request) {
+	resp, err := c.svc.GetTransferOptions(r.Context())
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, resp)
+}

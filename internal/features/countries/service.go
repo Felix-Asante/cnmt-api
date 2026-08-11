@@ -39,14 +39,9 @@ func (s *Service) GetDestCountriesBySrcCountryID(ctx context.Context, srcCountry
 		countryIDs[i] = dest.ID
 	}
 
-	channels, err := s.queries.GetActivePaymentChannelsByCountryIDs(ctx, countryIDs)
+	channelsByCountry, err := s.loadChannelsByCountry(ctx, countryIDs)
 	if err != nil {
-		return nil, common.TranslateDBError(err)
-	}
-
-	channelsByCountry := make(map[int64][]db.GetActivePaymentChannelsByCountryIDsRow, len(countryIDs))
-	for _, ch := range channels {
-		channelsByCountry[ch.CountryID] = append(channelsByCountry[ch.CountryID], ch)
+		return nil, err
 	}
 
 	responses, err := mapDestCountriesToResponses(destCountries, channelsByCountry)
@@ -55,4 +50,20 @@ func (s *Service) GetDestCountriesBySrcCountryID(ctx context.Context, srcCountry
 		return nil, err
 	}
 	return responses, nil
+}
+
+func (s *Service) loadChannelsByCountry(ctx context.Context, countryIDs []int64) (map[int64][]db.GetActivePaymentChannelsByCountryIDsRow, error) {
+	channelsByCountry := make(map[int64][]db.GetActivePaymentChannelsByCountryIDsRow, len(countryIDs))
+	if len(countryIDs) == 0 {
+		return channelsByCountry, nil
+	}
+
+	channels, err := s.queries.GetActivePaymentChannelsByCountryIDs(ctx, countryIDs)
+	if err != nil {
+		return nil, common.TranslateDBError(err)
+	}
+	for _, ch := range channels {
+		channelsByCountry[ch.CountryID] = append(channelsByCountry[ch.CountryID], ch)
+	}
+	return channelsByCountry, nil
 }

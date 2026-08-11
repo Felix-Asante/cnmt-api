@@ -14,6 +14,7 @@ import (
 
 	"cnmt/internal/common"
 	"cnmt/internal/common/httpx"
+	"cnmt/internal/features/countries"
 	"cnmt/internal/infra/db"
 	"cnmt/internal/infra/storage"
 
@@ -608,6 +609,61 @@ func (s *Service) CancelTransfer(ctx context.Context, transferID uuid.UUID, acto
 	return adminActionResponse{
 		Reference: transfer.Reference,
 		Status:    transfer.Status,
+	}, nil
+}
+
+func (s *Service) GetTransferOptions(ctx context.Context) (getTransferOptionsResponse, error) {
+	sources, err := s.queries.GetAllSourceCountries(ctx)
+	if err != nil {
+		return getTransferOptionsResponse{}, common.TranslateDBError(err)
+	}
+
+	destRows, err := s.queries.GetAllActiveRouteDestinations(ctx)
+	if err != nil {
+		return getTransferOptionsResponse{}, common.TranslateDBError(err)
+	}
+
+	countryIDs := make([]int64, 0, len(sources)+len(destRows))
+	seen := make(map[int64]struct{}, len(sources)+len(destRows))
+	for _, src := range sources {
+		seen[src.ID] = struct{}{}
+		countryIDs = append(countryIDs, src.ID)
+	}
+	for _, row := range destRows {
+		if _, ok := seen[row.ID]; ok {
+			continue
+		}
+		seen[row.ID] = struct{}{}
+		countryIDs = append(countryIDs, row.ID)
+	}
+
+	channelsByCountry := make(map[int64][]db.GetActivePaymentChannelsByCountryIDsRow, len(countryIDs))
+	if len(countryIDs) > 0 {
+		channels, err := s.queries.GetActivePaymentChannelsByCountryIDs(ctx, countryIDs)
+		if err != nil {
+			return getTransferOptionsResponse{}, common.TranslateDBError(err)
+		}
+		for _, ch := range channels {
+			channelsByCountry[ch.CountryID] = append(channelsByCountry[ch.CountryID], ch)
+		}
+	}
+
+	destinations := make([]destinationOption, 0, len(destRows))
+	for _, row := range destRows {
+		dest, err := countries.MapDestCountryFromRouteRow(row, channelsByCountry[row.ID])
+		if err != nil {
+			s.logger.Error("failed to map transfer destination", "error", err)
+			return getTransferOptionsResponse{}, err
+		}
+		destinations = append(destinations, destinationOption{
+			SourceCountryID:     row.SourceCountryID,
+			DestCountryResponse: dest,
+		})
+	}
+
+	return getTransferOptionsResponse{
+		Sources:      countries.MapSourceCountries(sources, channelsByCountry),
+		Destinations: destinations,
 	}, nil
 }
 

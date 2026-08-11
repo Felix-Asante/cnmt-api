@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"cnmt/internal/common"
+	"cnmt/internal/features/countries"
 	"cnmt/internal/infra/db"
 
 	"github.com/google/uuid"
@@ -129,9 +130,19 @@ type getAllTransfersRequest struct {
 
 type getAllTransfersResponse struct {
 	Transfers []getTransferResponse `json:"transfers"`
-	Total int `json:"total"`
-	Page int `json:"page"`
-	Limit int `json:"limit"`
+	Total     int                   `json:"total"`
+	Page      int                   `json:"page"`
+	Limit     int                   `json:"limit"`
+}
+
+type destinationOption struct {
+	SourceCountryID int64 `json:"source_country_id"`
+	countries.DestCountryResponse
+}
+
+type getTransferOptionsResponse struct {
+	Sources      []countries.SourceCountryDTO `json:"sources"`
+	Destinations []destinationOption          `json:"destinations"`
 }
 
 func mapTransferToDTO(transfer db.GetTransferByReferenceRow) (getTransferResponse, error) {

@@ -208,6 +208,74 @@ func (q *Queries) GetActiveRouteByCountries(ctx context.Context, arg GetActiveRo
 	return i, err
 }
 
+const getAllActiveRouteDestinations = `-- name: GetAllActiveRouteDestinations :many
+SELECT r.source_country_id,
+    c.id,
+    c.name,
+    c.iso_code,
+    c.flag,
+    c.currency_name,
+    c.currency_code,
+    c.currency_symbol,
+    r.min_transfer_amount,
+    r.max_transfer_amount
+FROM countries c
+    JOIN routes r ON r.destination_country_id = c.id
+    JOIN countries src ON src.id = r.source_country_id
+WHERE r.is_active = TRUE
+    AND r.deleted_at IS NULL
+    AND c.is_active = TRUE
+    AND c.deleted_at IS NULL
+    AND src.is_active = TRUE
+    AND src.deleted_at IS NULL
+ORDER BY r.source_country_id,
+    c.name
+`
+
+type GetAllActiveRouteDestinationsRow struct {
+	SourceCountryID   int64
+	ID                int64
+	Name              string
+	IsoCode           string
+	Flag              string
+	CurrencyName      string
+	CurrencyCode      string
+	CurrencySymbol    string
+	MinTransferAmount pgtype.Numeric
+	MaxTransferAmount pgtype.Numeric
+}
+
+func (q *Queries) GetAllActiveRouteDestinations(ctx context.Context) ([]GetAllActiveRouteDestinationsRow, error) {
+	rows, err := q.db.Query(ctx, getAllActiveRouteDestinations)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAllActiveRouteDestinationsRow{}
+	for rows.Next() {
+		var i GetAllActiveRouteDestinationsRow
+		if err := rows.Scan(
+			&i.SourceCountryID,
+			&i.ID,
+			&i.Name,
+			&i.IsoCode,
+			&i.Flag,
+			&i.CurrencyName,
+			&i.CurrencyCode,
+			&i.CurrencySymbol,
+			&i.MinTransferAmount,
+			&i.MaxTransferAmount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAllCountries = `-- name: GetAllCountries :many
 SELECT id, name, iso_code, flag, is_active, currency_name, currency_code, currency_symbol, created_at, updated_at, deleted_at
 FROM countries
@@ -236,6 +304,61 @@ func (q *Queries) GetAllCountries(ctx context.Context) ([]Country, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAllSourceCountries = `-- name: GetAllSourceCountries :many
+SELECT DISTINCT c.id,
+    c.name,
+    c.iso_code,
+    c.flag,
+    c.currency_name,
+    c.currency_code,
+    c.currency_symbol
+FROM countries c
+    JOIN routes r ON r.source_country_id = c.id
+WHERE c.is_active = TRUE
+    AND c.deleted_at IS NULL
+    AND r.is_active = TRUE
+    AND r.deleted_at IS NULL
+ORDER BY c.name
+`
+
+type GetAllSourceCountriesRow struct {
+	ID             int64
+	Name           string
+	IsoCode        string
+	Flag           string
+	CurrencyName   string
+	CurrencyCode   string
+	CurrencySymbol string
+}
+
+func (q *Queries) GetAllSourceCountries(ctx context.Context) ([]GetAllSourceCountriesRow, error) {
+	rows, err := q.db.Query(ctx, getAllSourceCountries)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAllSourceCountriesRow{}
+	for rows.Next() {
+		var i GetAllSourceCountriesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.IsoCode,
+			&i.Flag,
+			&i.CurrencyName,
+			&i.CurrencyCode,
+			&i.CurrencySymbol,
 		); err != nil {
 			return nil, err
 		}
