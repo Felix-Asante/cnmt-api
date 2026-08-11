@@ -60,3 +60,24 @@ WHERE pc.country_id = $1
     AND pc.deleted_at IS NULL
     AND c.is_active = TRUE
     AND c.deleted_at IS NULL;
+-- name: GetDestCountriesBySrcCountryID :many
+SELECT c.id,
+    c.name,
+    c.iso_code,
+    c.flag,
+    c.currency_name,
+    c.currency_code,
+    c.currency_symbol,
+    r.min_transfer_amount,
+    r.max_transfer_amount
+FROM countries c
+    JOIN routes r ON r.destination_country_id = c.id
+    JOIN countries src ON src.id = r.source_country_id
+WHERE r.source_country_id = $1
+    AND r.is_active = TRUE
+    AND r.deleted_at IS NULL
+    AND c.is_active = TRUE
+    AND c.deleted_at IS NULL
+    AND src.is_active = TRUE
+    AND src.deleted_at IS NULL
+ORDER BY c.name;

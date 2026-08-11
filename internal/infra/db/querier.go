@@ -23,6 +23,7 @@ type Querier interface {
 	GetAllTransfers(ctx context.Context, arg GetAllTransfersParams) ([]GetAllTransfersRow, error)
 	GetAllTransfersCount(ctx context.Context, arg GetAllTransfersCountParams) (int64, error)
 	GetCountryByID(ctx context.Context, id int64) (Country, error)
+	GetDestCountriesBySrcCountryID(ctx context.Context, sourceCountryID int64) ([]GetDestCountriesBySrcCountryIDRow, error)
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	GetPaymentChannelByCountryID(ctx context.Context, countryID int64) (PaymentChannel, error)
 	GetPaymentChannelByID(ctx context.Context, id uuid.UUID) (PaymentChannel, error)

@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createCountry = `-- name: CreateCountry :one
@@ -226,6 +227,71 @@ func (q *Queries) GetCountryByID(ctx context.Context, id int64) (Country, error)
 		&i.DeletedAt,
 	)
 	return i, err
+}
+
+const getDestCountriesBySrcCountryID = `-- name: GetDestCountriesBySrcCountryID :many
+SELECT c.id,
+    c.name,
+    c.iso_code,
+    c.flag,
+    c.currency_name,
+    c.currency_code,
+    c.currency_symbol,
+    r.min_transfer_amount,
+    r.max_transfer_amount
+FROM countries c
+    JOIN routes r ON r.destination_country_id = c.id
+    JOIN countries src ON src.id = r.source_country_id
+WHERE r.source_country_id = $1
+    AND r.is_active = TRUE
+    AND r.deleted_at IS NULL
+    AND c.is_active = TRUE
+    AND c.deleted_at IS NULL
+    AND src.is_active = TRUE
+    AND src.deleted_at IS NULL
+ORDER BY c.name
+`
+
+type GetDestCountriesBySrcCountryIDRow struct {
+	ID                int64
+	Name              string
+	IsoCode           string
+	Flag              string
+	CurrencyName      string
+	CurrencyCode      string
+	CurrencySymbol    string
+	MinTransferAmount pgtype.Numeric
+	MaxTransferAmount pgtype.Numeric
+}
+
+func (q *Queries) GetDestCountriesBySrcCountryID(ctx context.Context, sourceCountryID int64) ([]GetDestCountriesBySrcCountryIDRow, error) {
+	rows, err := q.db.Query(ctx, getDestCountriesBySrcCountryID, sourceCountryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetDestCountriesBySrcCountryIDRow{}
+	for rows.Next() {
+		var i GetDestCountriesBySrcCountryIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.IsoCode,
+			&i.Flag,
+			&i.CurrencyName,
+			&i.CurrencyCode,
+			&i.CurrencySymbol,
+			&i.MinTransferAmount,
+			&i.MaxTransferAmount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getPaymentChannelByCountryID = `-- name: GetPaymentChannelByCountryID :one
