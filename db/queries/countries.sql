@@ -81,3 +81,15 @@ WHERE r.source_country_id = $1
     AND src.is_active = TRUE
     AND src.deleted_at IS NULL
 ORDER BY c.name;
+
+-- name: GetActivePaymentChannelsByCountryIDs :many
+SELECT id,
+    name,
+    channel_type,
+    country_id
+FROM payment_channels
+WHERE country_id = ANY($1::bigint [])
+    AND is_active = TRUE
+    AND deleted_at IS NULL
+ORDER BY channel_type,
+    name;

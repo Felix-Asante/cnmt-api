@@ -18,6 +18,7 @@ type Querier interface {
 	CreateTransferEvent(ctx context.Context, arg CreateTransferEventParams) (TransferEvent, error)
 	DeleteCountry(ctx context.Context, id int64) error
 	GetActivePCByCountryTypeAndID(ctx context.Context, arg GetActivePCByCountryTypeAndIDParams) (PaymentChannel, error)
+	GetActivePaymentChannelsByCountryIDs(ctx context.Context, dollar_1 []int64) ([]GetActivePaymentChannelsByCountryIDsRow, error)
 	GetActiveRouteByCountries(ctx context.Context, arg GetActiveRouteByCountriesParams) (Route, error)
 	GetAllCountries(ctx context.Context) ([]Country, error)
 	GetAllTransfers(ctx context.Context, arg GetAllTransfersParams) ([]GetAllTransfersRow, error)

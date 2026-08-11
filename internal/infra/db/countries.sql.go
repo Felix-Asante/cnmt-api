@@ -122,6 +122,51 @@ func (q *Queries) GetActivePCByCountryTypeAndID(ctx context.Context, arg GetActi
 	return i, err
 }
 
+const getActivePaymentChannelsByCountryIDs = `-- name: GetActivePaymentChannelsByCountryIDs :many
+SELECT id,
+    name,
+    channel_type,
+    country_id
+FROM payment_channels
+WHERE country_id = ANY($1::bigint [])
+    AND is_active = TRUE
+    AND deleted_at IS NULL
+ORDER BY channel_type,
+    name
+`
+
+type GetActivePaymentChannelsByCountryIDsRow struct {
+	ID          uuid.UUID
+	Name        string
+	ChannelType ReceivingMethods
+	CountryID   int64
+}
+
+func (q *Queries) GetActivePaymentChannelsByCountryIDs(ctx context.Context, dollar_1 []int64) ([]GetActivePaymentChannelsByCountryIDsRow, error) {
+	rows, err := q.db.Query(ctx, getActivePaymentChannelsByCountryIDs, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetActivePaymentChannelsByCountryIDsRow{}
+	for rows.Next() {
+		var i GetActivePaymentChannelsByCountryIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.ChannelType,
+			&i.CountryID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getActiveRouteByCountries = `-- name: GetActiveRouteByCountries :one
 SELECT r.id, r.source_country_id, r.destination_country_id, r.is_active, r.default_exchange_rate, r.fee, r.fee_type, r.estimated_minutes, r.max_transfer_amount, r.min_transfer_amount, r.created_at, r.updated_at, r.deleted_at
 FROM routes r

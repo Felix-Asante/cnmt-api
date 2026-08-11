@@ -30,8 +30,26 @@ func (s *Service) GetDestCountriesBySrcCountryID(ctx context.Context, srcCountry
 	if err != nil {
 		return nil, common.TranslateDBError(err)
 	}
+	if len(destCountries) == 0 {
+		return []DestCountryResponse{}, nil
+	}
 
-	responses, err := mapDestCountriesToResponses(destCountries)
+	countryIDs := make([]int64, len(destCountries))
+	for i, dest := range destCountries {
+		countryIDs[i] = dest.ID
+	}
+
+	channels, err := s.queries.GetActivePaymentChannelsByCountryIDs(ctx, countryIDs)
+	if err != nil {
+		return nil, common.TranslateDBError(err)
+	}
+
+	channelsByCountry := make(map[int64][]db.GetActivePaymentChannelsByCountryIDsRow, len(countryIDs))
+	for _, ch := range channels {
+		channelsByCountry[ch.CountryID] = append(channelsByCountry[ch.CountryID], ch)
+	}
+
+	responses, err := mapDestCountriesToResponses(destCountries, channelsByCountry)
 	if err != nil {
 		s.logger.Error("failed to map destination countries", "error", err, "source_country_id", srcCountryID)
 		return nil, err
