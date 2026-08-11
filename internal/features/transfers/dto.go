@@ -67,6 +67,7 @@ type recipientViewDTO struct {
 
 
 type getTransferResponse struct {
+	ID                  uuid.UUID               `json:"id"`
 	Reference           string                  `json:"reference"`
 	Status              db.TransferStatus       `json:"status"`
 	Route               routeDTO                `json:"route"`
@@ -117,13 +118,13 @@ type transferEventDTO struct {
 }
 
 type getAllTransfersRequest struct {
-	SenderPhone    *string              `validate:"omitempty,e164"`
-	RecipientPhone *string              `validate:"omitempty,e164"`
-	RouteID        *uuid.UUID           `validate:"omitempty,uuid"`
-	Reference      *string              `validate:"omitempty,min=1,max=100"`
-	Status         *db.TransferStatus   `validate:"omitempty,oneof=PENDING_PAYMENT PAYMENT_RECEIVED VERIFYING PROCESSING COMPLETED FAILED CANCELLED"`
-	Page           *int                 `validate:"omitempty,gte=1"`
-	Limit          *int                 `validate:"omitempty,gte=1,lte=100"`
+	SenderPhone    *string              `json:"sender_phone" validate:"omitempty,e164"`
+	RecipientPhone *string              `json:"recipient_phone" validate:"omitempty,e164"`
+	RouteID        *uuid.UUID           `json:"route_id" validate:"omitempty,uuid"`
+	Reference      *string              `json:"reference" validate:"omitempty,min=1,max=100"`
+	Status         *db.TransferStatus   `json:"status" validate:"omitempty,oneof=PENDING_PAYMENT PAYMENT_RECEIVED VERIFYING PROCESSING COMPLETED FAILED CANCELLED"`
+	Page           *int                 `json:"page" validate:"omitempty,gte=1"`
+	Limit          *int                 `json:"limit" validate:"omitempty,gte=1,lte=100"`
 }
 
 type getAllTransfersResponse struct {
@@ -142,6 +143,7 @@ func mapListTransferToDTO(transfer db.GetAllTransfersRow) (getTransferResponse, 
 }
 
 type transferRow struct {
+	ID                         uuid.UUID
 	Reference                  string
 	Status                     db.TransferStatus
 	SourceCountryID            int64
@@ -173,6 +175,7 @@ type transferRow struct {
 
 func transferRowFromReference(row db.GetTransferByReferenceRow) transferRow {
 	return transferRow{
+		ID:                         row.ID,
 		Reference:                  row.Reference,
 		Status:                     row.Status,
 		SourceCountryID:            row.SourceCountryID,
@@ -203,6 +206,7 @@ func transferRowFromReference(row db.GetTransferByReferenceRow) transferRow {
 
 func transferRowFromList(row db.GetAllTransfersRow) transferRow {
 	return transferRow{
+		ID:                         row.ID,
 		Reference:                  row.Reference,
 		Status:                     row.Status,
 		SourceCountryID:            row.SourceCountryID,
@@ -250,6 +254,7 @@ func mapTransferRowToDTO(transfer transferRow) (getTransferResponse, error) {
 	}
 
 	resp := getTransferResponse{
+		ID:        transfer.ID,
 		Reference: transfer.Reference,
 		Status:    transfer.Status,
 		Route: routeDTO{
