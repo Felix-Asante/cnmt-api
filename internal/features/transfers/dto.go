@@ -99,6 +99,23 @@ type confirmPaymentProofRequest struct {
 	Key       string `json:"key" validate:"required,min=1"`
 }
 
+type adminActionRequest struct {
+	Reason *string `json:"reason,omitempty" validate:"omitempty,min=1,max=1000"`
+}
+
+type adminActionResponse struct {
+	Reference string          `json:"reference"`
+	Status    db.TransferStatus `json:"status"`
+}
+
+type transferEventDTO struct {
+	ID        uuid.UUID        `json:"id"`
+	Status    db.TransferStatus `json:"status"`
+	Actor     string           `json:"actor"`
+	Note      *string          `json:"note,omitempty"`
+	CreatedAt time.Time        `json:"created_at"`
+}
+
 type getAllTransfersRequest struct {
 	SenderPhone    *string              `validate:"omitempty,e164"`
 	RecipientPhone *string              `validate:"omitempty,e164"`

@@ -476,6 +476,141 @@ func (s *Service) GetAllTransfers(ctx context.Context, body getAllTransfersReque
 	}, nil
 }
 
+
+func (s *Service) transitionTransfer(ctx context.Context, transferID uuid.UUID, from, to db.TransferStatus, actor string, note *string) (adminActionResponse, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return adminActionResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := s.queries.WithTx(tx)
+
+	rowsAffected, err := qtx.TransitionTransferStatus(ctx, db.TransitionTransferStatusParams{
+		Column1: to,
+		ID:      transferID,
+		Column3: from,
+	})
+	if err != nil {
+		return adminActionResponse{}, common.TranslateDBError(err)
+	}
+
+	// failed to modify status
+	if rowsAffected == 0 {
+		transfer, err := qtx.GetTransferByID(ctx, transferID)
+		if err != nil {
+			return adminActionResponse{}, common.TranslateDBError(err)
+		}
+		return adminActionResponse{}, fmt.Errorf("%w: transfer is in status %s and cannot transition to %s", httpx.ConflictError, transfer.Status, to)
+	}
+
+	event, err := qtx.CreateTransferEvent(ctx, db.CreateTransferEventParams{
+		TransferID: transferID,
+		Status:     to,
+		Actor:      actor,
+		Note:       note,
+	})
+	if err != nil {
+		return adminActionResponse{}, common.TranslateDBError(err)
+	}
+	_ = event
+
+	if err := tx.Commit(ctx); err != nil {
+		return adminActionResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
+	}
+
+	transfer, err := s.queries.GetTransferByID(ctx, transferID)
+	if err != nil {
+		return adminActionResponse{}, common.TranslateDBError(err)
+	}
+
+	return adminActionResponse{
+		Reference: transfer.Reference,
+		Status:    transfer.Status,
+	}, nil
+}
+
+func (s *Service) VerifyPayment(ctx context.Context, transferID uuid.UUID, actor string) (adminActionResponse, error) {
+	return s.transitionTransfer(ctx, transferID, db.TransferStatusPAYMENTRECEIVED, db.TransferStatusVERIFYING, actor, nil)
+}
+
+func (s *Service) RejectPayment(ctx context.Context, transferID uuid.UUID, actor string, reason string) (adminActionResponse, error) {
+	return s.transitionTransfer(ctx, transferID, db.TransferStatusPAYMENTRECEIVED, db.TransferStatusPENDINGPAYMENT, actor, &reason)
+}
+
+func (s *Service) ProcessTransfer(ctx context.Context, transferID uuid.UUID, actor string) (adminActionResponse, error) {
+	return s.transitionTransfer(ctx, transferID, db.TransferStatusVERIFYING, db.TransferStatusPROCESSING, actor, nil)
+}
+
+func (s *Service) CompleteTransfer(ctx context.Context, transferID uuid.UUID, actor string) (adminActionResponse, error) {
+	return s.transitionTransfer(ctx, transferID, db.TransferStatusPROCESSING, db.TransferStatusCOMPLETED, actor, nil)
+}
+
+var cancellableStatuses = []db.TransferStatus{
+	db.TransferStatusPENDINGPAYMENT,
+	db.TransferStatusPAYMENTRECEIVED,
+	db.TransferStatusVERIFYING,
+	db.TransferStatusPROCESSING,
+}
+
+func (s *Service) CancelTransfer(ctx context.Context, transferID uuid.UUID, actor string, reason string) (adminActionResponse, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return adminActionResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := s.queries.WithTx(tx)
+
+	var transitioned bool
+	for _, from := range cancellableStatuses {
+		rows, err := qtx.TransitionTransferStatus(ctx, db.TransitionTransferStatusParams{
+			Column1: db.TransferStatusCANCELLED,
+			ID:      transferID,
+			Column3: from,
+		})
+		if err != nil {
+			return adminActionResponse{}, common.TranslateDBError(err)
+		}
+		if rows > 0 {
+			transitioned = true
+			break
+		}
+	}
+
+	if !transitioned {
+		transfer, err := qtx.GetTransferByID(ctx, transferID)
+		if err != nil {
+			return adminActionResponse{}, common.TranslateDBError(err)
+		}
+		return adminActionResponse{}, fmt.Errorf("%w: transfer is in status %s and cannot be cancelled", httpx.ConflictError, transfer.Status)
+	}
+
+	_, err = qtx.CreateTransferEvent(ctx, db.CreateTransferEventParams{
+		TransferID: transferID,
+		Status:     db.TransferStatusCANCELLED,
+		Actor:      actor,
+		Note:       &reason,
+	})
+	if err != nil {
+		return adminActionResponse{}, common.TranslateDBError(err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return adminActionResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
+	}
+
+	transfer, err := s.queries.GetTransferByID(ctx, transferID)
+	if err != nil {
+		return adminActionResponse{}, common.TranslateDBError(err)
+	}
+
+	return adminActionResponse{
+		Reference: transfer.Reference,
+		Status:    transfer.Status,
+	}, nil
+}
+
 func strOrEmpty(s *string) string {
 	if s == nil {
 		return ""

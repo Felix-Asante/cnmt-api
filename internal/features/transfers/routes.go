@@ -11,3 +11,15 @@ func (c *Controller) Routes(r chi.Router) {
 		r.Patch("/payment-proof/confirm", c.confirmPaymentProof)
 	})
 }
+
+func (c *Controller) AdminRoutes(r chi.Router) {
+	r.Route("/admin/transfers", func(r chi.Router) {
+		r.Route("/{id}", func(r chi.Router) {
+			r.Post("/verify-payment", c.verifyPayment)
+			r.Post("/reject-payment", c.rejectPayment)
+			r.Post("/process", c.processTransfer)
+			r.Post("/complete", c.completeTransfer)
+			r.Post("/cancel", c.cancelTransfer)
+		})
+	})
+}

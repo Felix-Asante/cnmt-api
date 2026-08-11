@@ -15,6 +15,7 @@ type Querier interface {
 	CreateCountry(ctx context.Context, arg CreateCountryParams) (Country, error)
 	CreatePaymentChannel(ctx context.Context, arg CreatePaymentChannelParams) (PaymentChannel, error)
 	CreateTransfer(ctx context.Context, arg CreateTransferParams) (uuid.UUID, error)
+	CreateTransferEvent(ctx context.Context, arg CreateTransferEventParams) (TransferEvent, error)
 	DeleteCountry(ctx context.Context, id int64) error
 	GetActivePCByCountryTypeAndID(ctx context.Context, arg GetActivePCByCountryTypeAndIDParams) (PaymentChannel, error)
 	GetActiveRouteByCountries(ctx context.Context, arg GetActiveRouteByCountriesParams) (Route, error)
@@ -24,10 +25,13 @@ type Querier interface {
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	GetPaymentChannelByCountryID(ctx context.Context, countryID int64) (PaymentChannel, error)
 	GetPaymentChannelByID(ctx context.Context, id uuid.UUID) (PaymentChannel, error)
+	GetTransferByID(ctx context.Context, id uuid.UUID) (GetTransferByIDRow, error)
 	GetTransferByReference(ctx context.Context, reference string) (GetTransferByReferenceRow, error)
+	GetTransferEventsByTransferID(ctx context.Context, transferID uuid.UUID) ([]TransferEvent, error)
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) (IdempotencyKey, error)
 	ListCountries(ctx context.Context) ([]Country, error)
 	SetPaymentProofKey(ctx context.Context, arg SetPaymentProofKeyParams) error
+	TransitionTransferStatus(ctx context.Context, arg TransitionTransferStatusParams) (int64, error)
 	UpdateCountry(ctx context.Context, arg UpdateCountryParams) (Country, error)
 }
 

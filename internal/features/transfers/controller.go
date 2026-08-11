@@ -7,6 +7,7 @@ import (
 	"cnmt/internal/common/httpx"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 type Controller struct {
@@ -100,4 +101,106 @@ func (c *Controller) confirmPaymentProof(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, nil)
+}
+
+const tempAdminActor = "admin"
+
+func (c *Controller) parseTransferID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	raw := chi.URLParam(r, "id")
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: invalid transfer id", httpx.BadRequestError))
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
+func (c *Controller) verifyPayment(w http.ResponseWriter, r *http.Request) {
+	id, ok := c.parseTransferID(w, r)
+	if !ok {
+		return
+	}
+
+	resp, err := c.svc.VerifyPayment(r.Context(), id, tempAdminActor)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, resp)
+}
+
+func (c *Controller) rejectPayment(w http.ResponseWriter, r *http.Request) {
+	id, ok := c.parseTransferID(w, r)
+	if !ok {
+		return
+	}
+
+	body, err := httpx.DecodeAndValidate[adminActionRequest](r)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err)
+		return
+	}
+	if body.Reason == nil || *body.Reason == "" {
+		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: reason is required", httpx.BadRequestError))
+		return
+	}
+
+	resp, err := c.svc.RejectPayment(r.Context(), id, tempAdminActor, *body.Reason)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, resp)
+}
+
+func (c *Controller) processTransfer(w http.ResponseWriter, r *http.Request) {
+	id, ok := c.parseTransferID(w, r)
+	if !ok {
+		return
+	}
+
+	resp, err := c.svc.ProcessTransfer(r.Context(), id, tempAdminActor)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, resp)
+}
+
+func (c *Controller) completeTransfer(w http.ResponseWriter, r *http.Request) {
+	id, ok := c.parseTransferID(w, r)
+	if !ok {
+		return
+	}
+
+	resp, err := c.svc.CompleteTransfer(r.Context(), id, tempAdminActor)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, resp)
+}
+
+func (c *Controller) cancelTransfer(w http.ResponseWriter, r *http.Request) {
+	id, ok := c.parseTransferID(w, r)
+	if !ok {
+		return
+	}
+
+	body, err := httpx.DecodeAndValidate[adminActionRequest](r)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err)
+		return
+	}
+	if body.Reason == nil || *body.Reason == "" {
+		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: reason is required", httpx.BadRequestError))
+		return
+	}
+
+	resp, err := c.svc.CancelTransfer(r.Context(), id, tempAdminActor, *body.Reason)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, resp)
 }

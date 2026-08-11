@@ -221,3 +221,12 @@ type Transfer struct {
 	UpdatedAt                  time.Time
 	DeletedAt                  pgtype.Timestamptz
 }
+
+type TransferEvent struct {
+	ID         uuid.UUID
+	TransferID uuid.UUID
+	Status     TransferStatus
+	Actor      string
+	Note       *string
+	CreatedAt  time.Time
+}

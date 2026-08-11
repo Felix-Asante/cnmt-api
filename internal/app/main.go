@@ -90,6 +90,7 @@ func initRoutes(r *chi.Mux, config RoutesConfig) {
 
 	r.Route("/api/v1", func(r chi.Router) {
 		transferCtrl.Routes(r)
+		transferCtrl.AdminRoutes(r)
 		countryCtrl.Routes(r)
 	})
 }
