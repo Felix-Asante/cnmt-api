@@ -26,6 +26,10 @@ var AllowedImageTypes = map[string]bool{
 	"image/png":  true,
 }
 
+var AllowedDocumentTypes = map[string]bool{
+	"application/pdf": true,
+}
+
 var (
 	ErrObjectNotFound   = errors.New("payment proof has not been uploaded")
 	ErrObjectTooLarge   = errors.New("payment proof exceeds the 10MB limit")
@@ -108,7 +112,7 @@ func (o *ObjStorage) ValidatePaymentProof(ctx context.Context, key string) error
 	if err != nil {
 		return err
 	}
-	if !isJPEGOrPNG(header) {
+	if !isJPEGOrPNG(header) && !isPDF(header) {
 		return ErrInvalidImageType
 	}
 	return nil
@@ -128,4 +132,9 @@ func isJPEGOrPNG(b []byte) bool {
 		return true
 	}
 	return bytes.HasPrefix(b, []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A})
+}
+
+
+func isPDF(b []byte) bool {
+	return bytes.HasPrefix(b, []byte("%PDF-"))
 }

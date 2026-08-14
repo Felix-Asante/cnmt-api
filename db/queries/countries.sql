@@ -69,7 +69,10 @@ SELECT c.id,
     c.currency_code,
     c.currency_symbol,
     r.min_transfer_amount,
-    r.max_transfer_amount
+    r.max_transfer_amount,
+    r.default_exchange_rate,
+    r.fee_type,
+    r.fee
 FROM countries c
     JOIN routes r ON r.destination_country_id = c.id
     JOIN countries src ON src.id = r.source_country_id
@@ -81,7 +84,6 @@ WHERE r.source_country_id = $1
     AND src.is_active = TRUE
     AND src.deleted_at IS NULL
 ORDER BY c.name;
-
 -- name: GetAllActiveRouteDestinations :many
 SELECT r.source_country_id,
     c.id,
@@ -92,7 +94,10 @@ SELECT r.source_country_id,
     c.currency_code,
     c.currency_symbol,
     r.min_transfer_amount,
-    r.max_transfer_amount
+    r.max_transfer_amount,
+    r.default_exchange_rate,
+    r.fee_type,
+    r.fee
 FROM countries c
     JOIN routes r ON r.destination_country_id = c.id
     JOIN countries src ON src.id = r.source_country_id
@@ -104,7 +109,6 @@ WHERE r.is_active = TRUE
     AND src.deleted_at IS NULL
 ORDER BY r.source_country_id,
     c.name;
-
 -- name: GetActivePaymentChannelsByCountryIDs :many
 SELECT id,
     name,

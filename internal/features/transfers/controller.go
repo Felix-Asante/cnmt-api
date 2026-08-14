@@ -100,7 +100,7 @@ func (c *Controller) confirmPaymentProof(w http.ResponseWriter, r *http.Request)
 		httpx.WriteError(w, httpx.StatusFromError(err), err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, nil)
+	httpx.WriteJSON(w, http.StatusOK,map[string]bool{"success": true})
 }
 
 const tempAdminActor = "admin"

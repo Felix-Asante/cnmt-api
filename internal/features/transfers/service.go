@@ -358,8 +358,8 @@ func (s *Service) CreatePaymentProofSignedUrl(ctx context.Context, reference, co
 	if reference == "" {
 		return createPaymentProofSignedUrlResponse{}, fmt.Errorf("%w: reference is required", httpx.BadRequestError)
 	}
-	if !storage.AllowedImageTypes[contentType] {
-		return createPaymentProofSignedUrlResponse{}, fmt.Errorf("%w: content_type must be image/jpeg, image/jpg, or image/png", httpx.BadRequestError)
+	if !storage.AllowedImageTypes[contentType] && !storage.AllowedDocumentTypes[contentType] {
+		return createPaymentProofSignedUrlResponse{}, fmt.Errorf("%w: content_type must be image/jpeg, image/jpg, image/png, or application/pdf", httpx.BadRequestError)
 	}
 
 	transfer, err := s.queries.GetTransferByReference(ctx, reference)

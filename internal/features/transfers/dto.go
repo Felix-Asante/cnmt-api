@@ -87,7 +87,7 @@ type getTransferResponse struct {
 
 type createPaymentProofSignedUrlRequest struct {
 	Reference   string `json:"reference" validate:"required"`
-	ContentType string `json:"content_type" validate:"required,oneof=image/jpeg image/jpg image/png"`
+	ContentType string `json:"content_type" validate:"required,oneof=image/jpeg image/jpg image/png application/pdf"`
 }
 
 type createPaymentProofSignedUrlResponse struct {

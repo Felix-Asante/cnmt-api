@@ -51,6 +51,9 @@ type DestCountryResponse struct {
 	CurrencySymbol    string              `json:"currency_symbol"`
 	MinTransferAmount decimal.Decimal     `json:"min_transfer_amount"`
 	MaxTransferAmount decimal.Decimal     `json:"max_transfer_amount"`
+	DefaultExchangeRate decimal.Decimal     `json:"default_exchange_rate"`
+	FeeType           db.FeeType          `json:"fee_type"`
+	Fee               decimal.Decimal     `json:"fee"`
 	Banks             []PaymentChannelDTO `json:"banks"`
 	MobileNetworks    []PaymentChannelDTO `json:"mobile_networks"`
 }
@@ -129,6 +132,9 @@ func MapDestCountryFromSrcRow(
 		row.CurrencySymbol,
 		row.MinTransferAmount,
 		row.MaxTransferAmount,
+		row.DefaultExchangeRate,
+		row.FeeType,
+		row.Fee,
 		channels,
 	)
 }
@@ -147,6 +153,9 @@ func MapDestCountryFromRouteRow(
 		row.CurrencySymbol,
 		row.MinTransferAmount,
 		row.MaxTransferAmount,
+		row.DefaultExchangeRate,
+		row.FeeType,
+		row.Fee,
 		channels,
 	)
 }
@@ -155,6 +164,9 @@ func mapDestCountry(
 	id int64,
 	name, isoCode, flag, currencyName, currencyCode, currencySymbol string,
 	minAmountRaw, maxAmountRaw pgtype.Numeric,
+	defaultExchangeRateRaw pgtype.Numeric,
+	feeTypeRaw db.FeeType,
+	feeRaw pgtype.Numeric,
 	channels []db.GetActivePaymentChannelsByCountryIDsRow,
 ) (DestCountryResponse, error) {
 	minAmount, err := common.PgNumericToDecimal(minAmountRaw)
@@ -168,6 +180,14 @@ func mapDestCountry(
 
 	banks, networks := groupPaymentChannels(channels)
 
+	defaultExchangeRate, err := common.PgNumericToDecimal(defaultExchangeRateRaw)
+	if err != nil {
+		defaultExchangeRate = decimal.Zero
+	}
+	fee, err := common.PgNumericToDecimal(feeRaw)
+	if err != nil {
+		fee = decimal.Zero
+	}
 	return DestCountryResponse{
 		ID:                id,
 		Name:              name,
@@ -178,6 +198,9 @@ func mapDestCountry(
 		CurrencySymbol:    currencySymbol,
 		MinTransferAmount: minAmount,
 		MaxTransferAmount: maxAmount,
+		DefaultExchangeRate: defaultExchangeRate,
+		FeeType:           feeTypeRaw,
+		Fee:               fee,
 		Banks:             banks,
 		MobileNetworks:    networks,
 	}, nil

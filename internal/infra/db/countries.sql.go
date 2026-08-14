@@ -218,7 +218,10 @@ SELECT r.source_country_id,
     c.currency_code,
     c.currency_symbol,
     r.min_transfer_amount,
-    r.max_transfer_amount
+    r.max_transfer_amount,
+    r.default_exchange_rate,
+    r.fee_type,
+    r.fee
 FROM countries c
     JOIN routes r ON r.destination_country_id = c.id
     JOIN countries src ON src.id = r.source_country_id
@@ -233,16 +236,19 @@ ORDER BY r.source_country_id,
 `
 
 type GetAllActiveRouteDestinationsRow struct {
-	SourceCountryID   int64
-	ID                int64
-	Name              string
-	IsoCode           string
-	Flag              string
-	CurrencyName      string
-	CurrencyCode      string
-	CurrencySymbol    string
-	MinTransferAmount pgtype.Numeric
-	MaxTransferAmount pgtype.Numeric
+	SourceCountryID     int64
+	ID                  int64
+	Name                string
+	IsoCode             string
+	Flag                string
+	CurrencyName        string
+	CurrencyCode        string
+	CurrencySymbol      string
+	MinTransferAmount   pgtype.Numeric
+	MaxTransferAmount   pgtype.Numeric
+	DefaultExchangeRate pgtype.Numeric
+	FeeType             FeeType
+	Fee                 pgtype.Numeric
 }
 
 func (q *Queries) GetAllActiveRouteDestinations(ctx context.Context) ([]GetAllActiveRouteDestinationsRow, error) {
@@ -265,6 +271,9 @@ func (q *Queries) GetAllActiveRouteDestinations(ctx context.Context) ([]GetAllAc
 			&i.CurrencySymbol,
 			&i.MinTransferAmount,
 			&i.MaxTransferAmount,
+			&i.DefaultExchangeRate,
+			&i.FeeType,
+			&i.Fee,
 		); err != nil {
 			return nil, err
 		}
@@ -406,7 +415,10 @@ SELECT c.id,
     c.currency_code,
     c.currency_symbol,
     r.min_transfer_amount,
-    r.max_transfer_amount
+    r.max_transfer_amount,
+    r.default_exchange_rate,
+    r.fee_type,
+    r.fee
 FROM countries c
     JOIN routes r ON r.destination_country_id = c.id
     JOIN countries src ON src.id = r.source_country_id
@@ -421,15 +433,18 @@ ORDER BY c.name
 `
 
 type GetDestCountriesBySrcCountryIDRow struct {
-	ID                int64
-	Name              string
-	IsoCode           string
-	Flag              string
-	CurrencyName      string
-	CurrencyCode      string
-	CurrencySymbol    string
-	MinTransferAmount pgtype.Numeric
-	MaxTransferAmount pgtype.Numeric
+	ID                  int64
+	Name                string
+	IsoCode             string
+	Flag                string
+	CurrencyName        string
+	CurrencyCode        string
+	CurrencySymbol      string
+	MinTransferAmount   pgtype.Numeric
+	MaxTransferAmount   pgtype.Numeric
+	DefaultExchangeRate pgtype.Numeric
+	FeeType             FeeType
+	Fee                 pgtype.Numeric
 }
 
 func (q *Queries) GetDestCountriesBySrcCountryID(ctx context.Context, sourceCountryID int64) ([]GetDestCountriesBySrcCountryIDRow, error) {
@@ -451,6 +466,9 @@ func (q *Queries) GetDestCountriesBySrcCountryID(ctx context.Context, sourceCoun
 			&i.CurrencySymbol,
 			&i.MinTransferAmount,
 			&i.MaxTransferAmount,
+			&i.DefaultExchangeRate,
+			&i.FeeType,
+			&i.Fee,
 		); err != nil {
 			return nil, err
 		}
