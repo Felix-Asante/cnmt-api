@@ -17,6 +17,7 @@ type Querier interface {
 	CreateTransfer(ctx context.Context, arg CreateTransferParams) (uuid.UUID, error)
 	CreateTransferEvent(ctx context.Context, arg CreateTransferEventParams) (TransferEvent, error)
 	DeleteCountry(ctx context.Context, id int64) error
+	DoesPaymentChannelExist(ctx context.Context, arg DoesPaymentChannelExistParams) (uuid.UUID, error)
 	GetActivePCByCountryTypeAndID(ctx context.Context, arg GetActivePCByCountryTypeAndIDParams) (PaymentChannel, error)
 	GetActivePaymentChannelsByCountryIDs(ctx context.Context, dollar_1 []int64) ([]GetActivePaymentChannelsByCountryIDsRow, error)
 	GetActiveRouteByCountries(ctx context.Context, arg GetActiveRouteByCountriesParams) (Route, error)
@@ -26,6 +27,7 @@ type Querier interface {
 	GetAllTransfers(ctx context.Context, arg GetAllTransfersParams) ([]GetAllTransfersRow, error)
 	GetAllTransfersCount(ctx context.Context, arg GetAllTransfersCountParams) (int64, error)
 	GetCountryByID(ctx context.Context, id int64) (Country, error)
+	GetCountryByName(ctx context.Context, name string) (Country, error)
 	GetDestCountriesBySrcCountryID(ctx context.Context, sourceCountryID int64) ([]GetDestCountriesBySrcCountryIDRow, error)
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	GetPaymentChannelByCountryID(ctx context.Context, countryID int64) (PaymentChannel, error)

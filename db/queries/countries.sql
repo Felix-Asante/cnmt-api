@@ -10,15 +10,26 @@ FROM countries
 WHERE deleted_at IS NULL
 ORDER BY name;
 -- name: CreateCountry :one
-INSERT INTO countries (name, iso_code, flag, is_active)
-VALUES ($1, $2, $3, $4)
+INSERT INTO countries (
+        name,
+        iso_code,
+        flag,
+        currency_name,
+        currency_code,
+        currency_symbol,
+        is_active
+    )
+VALUES ($1, $2, $3, $4, $5, $6, TRUE)
 RETURNING *;
 -- name: UpdateCountry :one
 UPDATE countries
 SET name = $2,
     iso_code = $3,
     flag = $4,
-    is_active = $5
+    currency_name = $5,
+    currency_code = $6,
+    currency_symbol = $7,
+    is_active = $8
 WHERE id = $1
 RETURNING *;
 -- name: DeleteCountry :exec
@@ -135,3 +146,16 @@ WHERE c.is_active = TRUE
     AND r.is_active = TRUE
     AND r.deleted_at IS NULL
 ORDER BY c.name;
+-- name: GetCountryByName :one
+SELECT *
+FROM countries
+WHERE name = $1
+    AND deleted_at IS NULL;
+-- name: DoesPaymentChannelExist :one
+SELECT id
+FROM payment_channels
+WHERE country_id = $1
+    AND name = $2
+    AND channel_type = $3
+    AND is_active = TRUE
+    AND deleted_at IS NULL;

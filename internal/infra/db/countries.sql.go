@@ -13,16 +13,26 @@ import (
 )
 
 const createCountry = `-- name: CreateCountry :one
-INSERT INTO countries (name, iso_code, flag, is_active)
-VALUES ($1, $2, $3, $4)
+INSERT INTO countries (
+        name,
+        iso_code,
+        flag,
+        currency_name,
+        currency_code,
+        currency_symbol,
+        is_active
+    )
+VALUES ($1, $2, $3, $4, $5, $6, TRUE)
 RETURNING id, name, iso_code, flag, is_active, currency_name, currency_code, currency_symbol, created_at, updated_at, deleted_at
 `
 
 type CreateCountryParams struct {
-	Name     string
-	IsoCode  string
-	Flag     string
-	IsActive bool
+	Name           string
+	IsoCode        string
+	Flag           string
+	CurrencyName   string
+	CurrencyCode   string
+	CurrencySymbol string
 }
 
 func (q *Queries) CreateCountry(ctx context.Context, arg CreateCountryParams) (Country, error) {
@@ -30,7 +40,9 @@ func (q *Queries) CreateCountry(ctx context.Context, arg CreateCountryParams) (C
 		arg.Name,
 		arg.IsoCode,
 		arg.Flag,
-		arg.IsActive,
+		arg.CurrencyName,
+		arg.CurrencyCode,
+		arg.CurrencySymbol,
 	)
 	var i Country
 	err := row.Scan(
@@ -85,6 +97,29 @@ WHERE id = $1
 func (q *Queries) DeleteCountry(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteCountry, id)
 	return err
+}
+
+const doesPaymentChannelExist = `-- name: DoesPaymentChannelExist :one
+SELECT id
+FROM payment_channels
+WHERE country_id = $1
+    AND name = $2
+    AND channel_type = $3
+    AND is_active = TRUE
+    AND deleted_at IS NULL
+`
+
+type DoesPaymentChannelExistParams struct {
+	CountryID   int64
+	Name        string
+	ChannelType ReceivingMethods
+}
+
+func (q *Queries) DoesPaymentChannelExist(ctx context.Context, arg DoesPaymentChannelExistParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, doesPaymentChannelExist, arg.CountryID, arg.Name, arg.ChannelType)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getActivePCByCountryTypeAndID = `-- name: GetActivePCByCountryTypeAndID :one
@@ -406,6 +441,32 @@ func (q *Queries) GetCountryByID(ctx context.Context, id int64) (Country, error)
 	return i, err
 }
 
+const getCountryByName = `-- name: GetCountryByName :one
+SELECT id, name, iso_code, flag, is_active, currency_name, currency_code, currency_symbol, created_at, updated_at, deleted_at
+FROM countries
+WHERE name = $1
+    AND deleted_at IS NULL
+`
+
+func (q *Queries) GetCountryByName(ctx context.Context, name string) (Country, error) {
+	row := q.db.QueryRow(ctx, getCountryByName, name)
+	var i Country
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.IsoCode,
+		&i.Flag,
+		&i.IsActive,
+		&i.CurrencyName,
+		&i.CurrencyCode,
+		&i.CurrencySymbol,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const getDestCountriesBySrcCountryID = `-- name: GetDestCountriesBySrcCountryID :many
 SELECT c.id,
     c.name,
@@ -529,17 +590,23 @@ UPDATE countries
 SET name = $2,
     iso_code = $3,
     flag = $4,
-    is_active = $5
+    currency_name = $5,
+    currency_code = $6,
+    currency_symbol = $7,
+    is_active = $8
 WHERE id = $1
 RETURNING id, name, iso_code, flag, is_active, currency_name, currency_code, currency_symbol, created_at, updated_at, deleted_at
 `
 
 type UpdateCountryParams struct {
-	ID       int64
-	Name     string
-	IsoCode  string
-	Flag     string
-	IsActive bool
+	ID             int64
+	Name           string
+	IsoCode        string
+	Flag           string
+	CurrencyName   string
+	CurrencyCode   string
+	CurrencySymbol string
+	IsActive       bool
 }
 
 func (q *Queries) UpdateCountry(ctx context.Context, arg UpdateCountryParams) (Country, error) {
@@ -548,6 +615,9 @@ func (q *Queries) UpdateCountry(ctx context.Context, arg UpdateCountryParams) (C
 		arg.Name,
 		arg.IsoCode,
 		arg.Flag,
+		arg.CurrencyName,
+		arg.CurrencyCode,
+		arg.CurrencySymbol,
 		arg.IsActive,
 	)
 	var i Country

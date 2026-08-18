@@ -22,7 +22,7 @@ type AppConfig struct {
 	dbConn *pgxpool.Pool
 }
 
-func NewApp(dbConn *pgxpool.Pool) (*AppConfig) {
+func NewApp(dbConn *pgxpool.Pool) *AppConfig {
 	return &AppConfig{
 		dbConn: dbConn,
 	}
@@ -50,7 +50,6 @@ func (app *AppConfig) Run() (*chi.Mux, error) {
 
 	httpx.InitValidator()
 
-
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.StripSlashes)
@@ -64,29 +63,30 @@ func (app *AppConfig) Run() (*chi.Mux, error) {
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
 		MaxAge:           300,
-	  }))
+	}))
 
-	  config := RoutesConfig{
-		dbConn: app.dbConn,
+	config := RoutesConfig{
+		dbConn:     app.dbConn,
 		objStorage: objStorage,
-		logger: logger,
-	  }
+		logger:     logger,
+	}
 
-	  initRoutes(r, config)
+	initRoutes(r, config)
 
 	return r, nil
 }
 
 type RoutesConfig struct {
-	dbConn *pgxpool.Pool
+	dbConn     *pgxpool.Pool
 	objStorage *storage.ObjStorage
-	logger *slog.Logger
+	logger     *slog.Logger
 }
+
 func initRoutes(r *chi.Mux, config RoutesConfig) {
 	dbQueries := db.New(config.dbConn)
 
 	transferCtrl := transfers.NewController(transfers.NewService(config.dbConn, dbQueries, config.objStorage, config.logger))
-	countryCtrl := countries.NewController(countries.NewService(dbQueries, config.logger))
+	countryCtrl := countries.NewController(countries.NewService(dbQueries, config.logger, config.dbConn))
 
 	r.Route("/api/v1", func(r chi.Router) {
 		transferCtrl.Routes(r)

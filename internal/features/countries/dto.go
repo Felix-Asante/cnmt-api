@@ -58,6 +58,21 @@ type DestCountryResponse struct {
 	MobileNetworks    []PaymentChannelDTO `json:"mobile_networks"`
 }
 
+
+type CreatePaymentChannelRequest struct {
+	Name string `json:"name" validate:"required,min=3,max=255"`
+	ChannelType db.ReceivingMethods `json:"channel_type" validate:"required,oneof=BANK MOBILE_MONEY"`
+}
+type CreateCountryRequest struct {
+	Name string `json:"name" validate:"required,min=3,max=255"`
+	ISOCode string `json:"iso_code" validate:"required,min=2,max=3"`
+	Flag string `json:"flag" validate:"required,min=1,max=1"`
+	CurrencyName string `json:"currency_name" validate:"required"`
+	CurrencyCode string `json:"currency_code" validate:"required,min=3,max=3"`
+	CurrencySymbol string `json:"currency_symbol" validate:"required,min=1,max=3"`
+	PaymentChannels []*CreatePaymentChannelRequest `json:"payment_channels" validate:"required,omitempty"`
+}
+
 func mapCountriesToResponses(countries []db.Country) []CountryResponse {
 	responses := make([]CountryResponse, len(countries))
 	for i, country := range countries {

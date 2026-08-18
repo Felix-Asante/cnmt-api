@@ -41,3 +41,17 @@ func (c *Controller) getDestCountries(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, http.StatusOK, destCountries)
 }
+
+func (c *Controller) createCountry(w http.ResponseWriter, r *http.Request) {
+	body, err := httpx.DecodeAndValidate[CreateCountryRequest](r)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: invalid request body", httpx.BadRequestError))
+		return
+	}
+	country, err := c.svc.CreateCountry(r.Context(), body)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, country)
+}
