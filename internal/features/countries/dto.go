@@ -73,6 +73,38 @@ type CreateCountryRequest struct {
 	PaymentChannels []*CreatePaymentChannelRequest `json:"payment_channels" validate:"required,omitempty"`
 }
 
+type CreateRouteRequest struct {
+	SourceCountryID   int64           `json:"source_country_id" validate:"required,gt=0"`
+	DestCountryID     int64           `json:"dest_country_id" validate:"required,gt=0"`
+	ExchangeRate      decimal.Decimal `json:"exchange_rate" validate:"required"`
+	FeeType           db.FeeType      `json:"fee_type" validate:"required,oneof=fixed percentage"`
+	Fee               decimal.Decimal `json:"fee" validate:"required"`
+	MinTransferAmount decimal.Decimal `json:"min_transfer_amount" validate:"required"`
+	MaxTransferAmount decimal.Decimal `json:"max_transfer_amount" validate:"required"`
+}
+
+type UpdateRouteRequest struct {
+	ExchangeRate      decimal.Decimal `json:"exchange_rate" validate:"required"`
+	FeeType           db.FeeType      `json:"fee_type" validate:"required,oneof=fixed percentage"`
+	Fee               decimal.Decimal `json:"fee" validate:"required"`
+	MinTransferAmount decimal.Decimal `json:"min_transfer_amount" validate:"required"`
+	MaxTransferAmount decimal.Decimal `json:"max_transfer_amount" validate:"required"`
+}
+
+type RouteResponse struct {
+	ID                   uuid.UUID       `json:"id"`
+	SourceCountryID      int64           `json:"source_country_id"`
+	DestinationCountryID int64           `json:"destination_country_id"`
+	IsActive             bool            `json:"is_active"`
+	DefaultExchangeRate  decimal.Decimal `json:"default_exchange_rate"`
+	Fee                  decimal.Decimal `json:"fee"`
+	FeeType              db.FeeType      `json:"fee_type"`
+	MinTransferAmount    decimal.Decimal `json:"min_transfer_amount"`
+	MaxTransferAmount    decimal.Decimal `json:"max_transfer_amount"`
+	CreatedAt            time.Time       `json:"created_at"`
+	UpdatedAt            time.Time       `json:"updated_at"`
+}
+
 func mapCountriesToResponses(countries []db.Country) []CountryResponse {
 	responses := make([]CountryResponse, len(countries))
 	for i, country := range countries {
@@ -218,6 +250,39 @@ func mapDestCountry(
 		Fee:               fee,
 		Banks:             banks,
 		MobileNetworks:    networks,
+	}, nil
+}
+
+func mapRouteToResponse(route db.Route) (RouteResponse, error) {
+	rate, err := common.PgNumericToDecimal(route.DefaultExchangeRate)
+	if err != nil {
+		return RouteResponse{}, err
+	}
+	fee, err := common.PgNumericToDecimal(route.Fee)
+	if err != nil {
+		return RouteResponse{}, err
+	}
+	minAmount, err := common.PgNumericToDecimal(route.MinTransferAmount)
+	if err != nil {
+		return RouteResponse{}, err
+	}
+	maxAmount, err := common.PgNumericToDecimal(route.MaxTransferAmount)
+	if err != nil {
+		return RouteResponse{}, err
+	}
+
+	return RouteResponse{
+		ID:                   route.ID,
+		SourceCountryID:      route.SourceCountryID,
+		DestinationCountryID: route.DestinationCountryID,
+		IsActive:             route.IsActive,
+		DefaultExchangeRate:  rate,
+		Fee:                  fee,
+		FeeType:              route.FeeType,
+		MinTransferAmount:    minAmount,
+		MaxTransferAmount:    maxAmount,
+		CreatedAt:            route.CreatedAt,
+		UpdatedAt:            route.UpdatedAt,
 	}, nil
 }
 

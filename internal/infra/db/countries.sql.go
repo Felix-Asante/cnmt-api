@@ -89,6 +89,59 @@ func (q *Queries) CreatePaymentChannel(ctx context.Context, arg CreatePaymentCha
 	return i, err
 }
 
+const createRoute = `-- name: CreateRoute :one
+INSERT INTO routes (
+        source_country_id,
+        destination_country_id,
+        default_exchange_rate,
+        fee,
+        fee_type,
+        min_transfer_amount,
+        max_transfer_amount
+    )
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, source_country_id, destination_country_id, is_active, default_exchange_rate, fee, fee_type, estimated_minutes, max_transfer_amount, min_transfer_amount, created_at, updated_at, deleted_at
+`
+
+type CreateRouteParams struct {
+	SourceCountryID      int64
+	DestinationCountryID int64
+	DefaultExchangeRate  pgtype.Numeric
+	Fee                  pgtype.Numeric
+	FeeType              FeeType
+	MinTransferAmount    pgtype.Numeric
+	MaxTransferAmount    pgtype.Numeric
+}
+
+func (q *Queries) CreateRoute(ctx context.Context, arg CreateRouteParams) (Route, error) {
+	row := q.db.QueryRow(ctx, createRoute,
+		arg.SourceCountryID,
+		arg.DestinationCountryID,
+		arg.DefaultExchangeRate,
+		arg.Fee,
+		arg.FeeType,
+		arg.MinTransferAmount,
+		arg.MaxTransferAmount,
+	)
+	var i Route
+	err := row.Scan(
+		&i.ID,
+		&i.SourceCountryID,
+		&i.DestinationCountryID,
+		&i.IsActive,
+		&i.DefaultExchangeRate,
+		&i.Fee,
+		&i.FeeType,
+		&i.EstimatedMinutes,
+		&i.MaxTransferAmount,
+		&i.MinTransferAmount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const deleteCountry = `-- name: DeleteCountry :exec
 DELETE FROM countries
 WHERE id = $1
@@ -97,6 +150,37 @@ WHERE id = $1
 func (q *Queries) DeleteCountry(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteCountry, id)
 	return err
+}
+
+const deleteRoute = `-- name: DeleteRoute :one
+UPDATE routes
+SET deleted_at = now(),
+    is_active = FALSE,
+    updated_at = now()
+WHERE id = $1
+    AND deleted_at IS NULL
+RETURNING id, source_country_id, destination_country_id, is_active, default_exchange_rate, fee, fee_type, estimated_minutes, max_transfer_amount, min_transfer_amount, created_at, updated_at, deleted_at
+`
+
+func (q *Queries) DeleteRoute(ctx context.Context, id uuid.UUID) (Route, error) {
+	row := q.db.QueryRow(ctx, deleteRoute, id)
+	var i Route
+	err := row.Scan(
+		&i.ID,
+		&i.SourceCountryID,
+		&i.DestinationCountryID,
+		&i.IsActive,
+		&i.DefaultExchangeRate,
+		&i.Fee,
+		&i.FeeType,
+		&i.EstimatedMinutes,
+		&i.MaxTransferAmount,
+		&i.MinTransferAmount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
 }
 
 const doesPaymentChannelExist = `-- name: DoesPaymentChannelExist :one
@@ -585,6 +669,36 @@ func (q *Queries) GetPaymentChannelByID(ctx context.Context, id uuid.UUID) (Paym
 	return i, err
 }
 
+const toggleRouteActive = `-- name: ToggleRouteActive :one
+UPDATE routes
+SET is_active = NOT is_active,
+    updated_at = now()
+WHERE id = $1
+    AND deleted_at IS NULL
+RETURNING id, source_country_id, destination_country_id, is_active, default_exchange_rate, fee, fee_type, estimated_minutes, max_transfer_amount, min_transfer_amount, created_at, updated_at, deleted_at
+`
+
+func (q *Queries) ToggleRouteActive(ctx context.Context, id uuid.UUID) (Route, error) {
+	row := q.db.QueryRow(ctx, toggleRouteActive, id)
+	var i Route
+	err := row.Scan(
+		&i.ID,
+		&i.SourceCountryID,
+		&i.DestinationCountryID,
+		&i.IsActive,
+		&i.DefaultExchangeRate,
+		&i.Fee,
+		&i.FeeType,
+		&i.EstimatedMinutes,
+		&i.MaxTransferAmount,
+		&i.MinTransferAmount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const updateCountry = `-- name: UpdateCountry :one
 UPDATE countries
 SET name = $2,
@@ -630,6 +744,56 @@ func (q *Queries) UpdateCountry(ctx context.Context, arg UpdateCountryParams) (C
 		&i.CurrencyName,
 		&i.CurrencyCode,
 		&i.CurrencySymbol,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const updateRoute = `-- name: UpdateRoute :one
+UPDATE routes
+SET default_exchange_rate = $2,
+    fee = $3,
+    fee_type = $4,
+    min_transfer_amount = $5,
+    max_transfer_amount = $6,
+    updated_at = now()
+WHERE id = $1
+    AND deleted_at IS NULL
+RETURNING id, source_country_id, destination_country_id, is_active, default_exchange_rate, fee, fee_type, estimated_minutes, max_transfer_amount, min_transfer_amount, created_at, updated_at, deleted_at
+`
+
+type UpdateRouteParams struct {
+	ID                  uuid.UUID
+	DefaultExchangeRate pgtype.Numeric
+	Fee                 pgtype.Numeric
+	FeeType             FeeType
+	MinTransferAmount   pgtype.Numeric
+	MaxTransferAmount   pgtype.Numeric
+}
+
+func (q *Queries) UpdateRoute(ctx context.Context, arg UpdateRouteParams) (Route, error) {
+	row := q.db.QueryRow(ctx, updateRoute,
+		arg.ID,
+		arg.DefaultExchangeRate,
+		arg.Fee,
+		arg.FeeType,
+		arg.MinTransferAmount,
+		arg.MaxTransferAmount,
+	)
+	var i Route
+	err := row.Scan(
+		&i.ID,
+		&i.SourceCountryID,
+		&i.DestinationCountryID,
+		&i.IsActive,
+		&i.DefaultExchangeRate,
+		&i.Fee,
+		&i.FeeType,
+		&i.EstimatedMinutes,
+		&i.MaxTransferAmount,
+		&i.MinTransferAmount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,

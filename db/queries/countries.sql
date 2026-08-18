@@ -159,3 +159,41 @@ WHERE country_id = $1
     AND channel_type = $3
     AND is_active = TRUE
     AND deleted_at IS NULL;
+-- name: CreateRoute :one
+INSERT INTO routes (
+        source_country_id,
+        destination_country_id,
+        default_exchange_rate,
+        fee,
+        fee_type,
+        min_transfer_amount,
+        max_transfer_amount
+    )
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING *;
+-- name: UpdateRoute :one
+UPDATE routes
+SET default_exchange_rate = $2,
+    fee = $3,
+    fee_type = $4,
+    min_transfer_amount = $5,
+    max_transfer_amount = $6,
+    updated_at = now()
+WHERE id = $1
+    AND deleted_at IS NULL
+RETURNING *;
+-- name: DeleteRoute :one
+UPDATE routes
+SET deleted_at = now(),
+    is_active = FALSE,
+    updated_at = now()
+WHERE id = $1
+    AND deleted_at IS NULL
+RETURNING *;
+-- name: ToggleRouteActive :one
+UPDATE routes
+SET is_active = NOT is_active,
+    updated_at = now()
+WHERE id = $1
+    AND deleted_at IS NULL
+RETURNING *;

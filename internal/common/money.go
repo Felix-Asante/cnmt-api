@@ -7,7 +7,10 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-const MoneyDecimalPlaces int32 = 2
+const (
+	MoneyDecimalPlaces int32 = 2
+	RateDecimalPlaces  int32 = 4
+)
 
 func PgNumericToDecimal(pgNum pgtype.Numeric) (decimal.Decimal, error) {
 	if !pgNum.Valid || pgNum.Int == nil {
@@ -25,8 +28,16 @@ func ConvertPgNumericToDecimal(pgNum pgtype.Numeric) decimal.Decimal {
 }
 
 func DecimalToPgNumeric(d decimal.Decimal) (pgtype.Numeric, error) {
+	return decimalToPgNumeric(d, MoneyDecimalPlaces)
+}
+
+func DecimalToPgRate(d decimal.Decimal) (pgtype.Numeric, error) {
+	return decimalToPgNumeric(d, RateDecimalPlaces)
+}
+
+func decimalToPgNumeric(d decimal.Decimal, places int32) (pgtype.Numeric, error) {
 	var n pgtype.Numeric
-	if err := n.Scan(d.StringFixed(MoneyDecimalPlaces)); err != nil {
+	if err := n.Scan(d.StringFixed(places)); err != nil {
 		return pgtype.Numeric{}, fmt.Errorf("convert decimal to numeric: %w", err)
 	}
 	return n, nil
