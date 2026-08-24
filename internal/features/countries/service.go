@@ -187,6 +187,27 @@ func (s *Service) ToggleRouteActive(ctx context.Context, id uuid.UUID) (RouteRes
 	return s.mapRoute(route)
 }
 
+func (s *Service) ListRoutes(ctx context.Context, sourceCountryID, destCountryID int64, isActive string) ([]RouteResponse, error) {
+	rows, err := s.queries.ListRoutes(ctx, db.ListRoutesParams{
+		SourceCountryID:      sourceCountryID,
+		DestinationCountryID: destCountryID,
+		IsActive:             isActive,
+	})
+	if err != nil {
+		return nil, common.TranslateDBError(err)
+	}
+
+	routes := make([]RouteResponse, 0, len(rows))
+	for _, row := range rows {
+		route, err := s.mapRoute(row)
+		if err != nil {
+			return nil, err
+		}
+		routes = append(routes, route)
+	}
+	return routes, nil
+}
+
 type routePricing struct {
 	rate      pgtype.Numeric
 	fee       pgtype.Numeric

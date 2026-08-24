@@ -669,6 +669,56 @@ func (q *Queries) GetPaymentChannelByID(ctx context.Context, id uuid.UUID) (Paym
 	return i, err
 }
 
+const listRoutes = `-- name: ListRoutes :many
+SELECT id, source_country_id, destination_country_id, is_active, default_exchange_rate, fee, fee_type, estimated_minutes, max_transfer_amount, min_transfer_amount, created_at, updated_at, deleted_at
+FROM routes
+WHERE deleted_at IS NULL
+    AND source_country_id = COALESCE(NULLIF($1::bigint, 0), source_country_id)
+    AND destination_country_id = COALESCE(NULLIF($2::bigint, 0), destination_country_id)
+    AND is_active = COALESCE(NULLIF($3::text, '')::boolean, is_active)
+ORDER BY created_at DESC
+`
+
+type ListRoutesParams struct {
+	SourceCountryID      int64
+	DestinationCountryID int64
+	IsActive             string
+}
+
+func (q *Queries) ListRoutes(ctx context.Context, arg ListRoutesParams) ([]Route, error) {
+	rows, err := q.db.Query(ctx, listRoutes, arg.SourceCountryID, arg.DestinationCountryID, arg.IsActive)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Route{}
+	for rows.Next() {
+		var i Route
+		if err := rows.Scan(
+			&i.ID,
+			&i.SourceCountryID,
+			&i.DestinationCountryID,
+			&i.IsActive,
+			&i.DefaultExchangeRate,
+			&i.Fee,
+			&i.FeeType,
+			&i.EstimatedMinutes,
+			&i.MaxTransferAmount,
+			&i.MinTransferAmount,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const toggleRouteActive = `-- name: ToggleRouteActive :one
 UPDATE routes
 SET is_active = NOT is_active,

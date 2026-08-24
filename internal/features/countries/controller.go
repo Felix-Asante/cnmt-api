@@ -46,7 +46,7 @@ func (c *Controller) getDestCountries(w http.ResponseWriter, r *http.Request) {
 func (c *Controller) createCountry(w http.ResponseWriter, r *http.Request) {
 	body, err := httpx.DecodeAndValidate[CreateCountryRequest](r)
 	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: invalid request body", httpx.BadRequestError))
+		httpx.WriteError(w, http.StatusBadRequest, err)
 		return
 	}
 	country, err := c.svc.CreateCountry(r.Context(), body)
@@ -70,6 +70,34 @@ func (c *Controller) createRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, route)
+}
+
+func (c *Controller) listRoutes(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+
+	sourceCountryID, err := parseOptionalInt64(q.Get("source_country_id"))
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: invalid source_country_id", httpx.BadRequestError))
+		return
+	}
+	destCountryID, err := parseOptionalInt64(q.Get("dest_country_id"))
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: invalid dest_country_id", httpx.BadRequestError))
+		return
+	}
+
+	isActive := q.Get("is_active")
+	if isActive != "" && isActive != "true" && isActive != "false" {
+		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: is_active must be true or false", httpx.BadRequestError))
+		return
+	}
+
+	routes, err := c.svc.ListRoutes(r.Context(), sourceCountryID, destCountryID, isActive)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, routes)
 }
 
 func (c *Controller) updateRoute(w http.ResponseWriter, r *http.Request) {
@@ -126,4 +154,15 @@ func (c *Controller) parseRouteID(w http.ResponseWriter, r *http.Request) (uuid.
 		return uuid.Nil, false
 	}
 	return id, true
+}
+
+func parseOptionalInt64(raw string) (int64, error) {
+	if raw == "" {
+		return 0, nil
+	}
+	n, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || n <= 0 {
+		return 0, err
+	}
+	return n, nil
 }

@@ -38,6 +38,7 @@ type Querier interface {
 	GetTransferByReference(ctx context.Context, reference string) (GetTransferByReferenceRow, error)
 	GetTransferEventsByTransferID(ctx context.Context, transferID uuid.UUID) ([]TransferEvent, error)
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) (IdempotencyKey, error)
+	ListRoutes(ctx context.Context, arg ListRoutesParams) ([]Route, error)
 	SetPaymentProofKey(ctx context.Context, arg SetPaymentProofKeyParams) error
 	ToggleRouteActive(ctx context.Context, id uuid.UUID) (Route, error)
 	TransitionTransferStatus(ctx context.Context, arg TransitionTransferStatusParams) (int64, error)

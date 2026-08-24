@@ -197,3 +197,11 @@ SET is_active = NOT is_active,
 WHERE id = $1
     AND deleted_at IS NULL
 RETURNING *;
+-- name: ListRoutes :many
+SELECT *
+FROM routes
+WHERE deleted_at IS NULL
+    AND source_country_id = COALESCE(NULLIF(sqlc.arg(source_country_id)::bigint, 0), source_country_id)
+    AND destination_country_id = COALESCE(NULLIF(sqlc.arg(destination_country_id)::bigint, 0), destination_country_id)
+    AND is_active = COALESCE(NULLIF(sqlc.arg(is_active)::text, '')::boolean, is_active)
+ORDER BY created_at DESC;

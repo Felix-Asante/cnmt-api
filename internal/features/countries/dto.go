@@ -66,7 +66,7 @@ type CreatePaymentChannelRequest struct {
 type CreateCountryRequest struct {
 	Name string `json:"name" validate:"required,min=3,max=255"`
 	ISOCode string `json:"iso_code" validate:"required,min=2,max=3"`
-	Flag string `json:"flag" validate:"required,min=1,max=1"`
+	Flag string `json:"flag" validate:"required,min=1,max=16"`
 	CurrencyName string `json:"currency_name" validate:"required"`
 	CurrencyCode string `json:"currency_code" validate:"required,min=3,max=3"`
 	CurrencySymbol string `json:"currency_symbol" validate:"required,min=1,max=3"`
@@ -254,21 +254,32 @@ func mapDestCountry(
 }
 
 func mapRouteToResponse(route db.Route) (RouteResponse, error) {
-	rate, err := common.PgNumericToDecimal(route.DefaultExchangeRate)
-	if err != nil {
-		return RouteResponse{}, err
+	var rate, fee, minAmount, maxAmount decimal.Decimal
+	var err error
+	
+	if route.DefaultExchangeRate.Valid {
+		rate, err = common.PgNumericToDecimal(route.DefaultExchangeRate)
+		if err != nil {
+			return RouteResponse{}, err
+		}
 	}
-	fee, err := common.PgNumericToDecimal(route.Fee)
-	if err != nil {
-		return RouteResponse{}, err
+	if route.Fee.Valid {
+		fee, err = common.PgNumericToDecimal(route.Fee)
+		if err != nil {
+			return RouteResponse{}, err
+		}
 	}
-	minAmount, err := common.PgNumericToDecimal(route.MinTransferAmount)
-	if err != nil {
-		return RouteResponse{}, err
+	if route.MinTransferAmount.Valid {
+		minAmount, err = common.PgNumericToDecimal(route.MinTransferAmount)
+		if err != nil {
+			return RouteResponse{}, err
+		}
 	}
-	maxAmount, err := common.PgNumericToDecimal(route.MaxTransferAmount)
-	if err != nil {
-		return RouteResponse{}, err
+	if route.MaxTransferAmount.Valid {
+		maxAmount, err = common.PgNumericToDecimal(route.MaxTransferAmount)
+		if err != nil {
+			return RouteResponse{}, err
+		}
 	}
 
 	return RouteResponse{

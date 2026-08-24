@@ -14,6 +14,7 @@ func (c *Controller) AdminRoutes(r chi.Router) {
 		r.Post("/", c.createCountry)
 	})
 	r.Route("/admin/routes", func(r chi.Router) {
+		r.Get("/", c.listRoutes)
 		r.Post("/", c.createRoute)
 		r.Route("/{id}", func(r chi.Router) {
 			r.Patch("/", c.updateRoute)
