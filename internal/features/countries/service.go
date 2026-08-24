@@ -34,6 +34,28 @@ func (s *Service) GetCountries(ctx context.Context) ([]CountryResponse, error) {
 	return mapCountriesToResponses(countries), nil
 }
 
+func (s *Service) GetCountryByID(ctx context.Context, id int64) (CountryDetailResponse, error) {
+	country, err := s.queries.GetAdminCountryByID(ctx, id)
+	if err != nil {
+		return CountryDetailResponse{}, common.TranslateDBError(err)
+	}
+
+	channels, err := s.queries.GetPaymentChannelsByCountryID(ctx, id)
+	if err != nil {
+		return CountryDetailResponse{}, common.TranslateDBError(err)
+	}
+
+	paymentChannels := make([]PaymentChannelResponse, 0, len(channels))
+	for _, ch := range channels {
+		paymentChannels = append(paymentChannels, mapPaymentChannelToResponse(ch))
+	}
+
+	return CountryDetailResponse{
+		CountryResponse: mapCountryToResponse(country),
+		PaymentChannels: paymentChannels,
+	}, nil
+}
+
 func (s *Service) GetDestCountriesBySrcCountryID(ctx context.Context, srcCountryID int64) ([]DestCountryResponse, error) {
 	destCountries, err := s.queries.GetDestCountriesBySrcCountryID(ctx, srcCountryID)
 	if err != nil {
@@ -85,23 +107,12 @@ func (s *Service) CreateCountry(ctx context.Context, req CreateCountryRequest) (
 	defer tx.Rollback(ctx)
 
 	qtx := s.queries.WithTx(tx)
-	country, err := qtx.CreateCountry(ctx, db.CreateCountryParams{
-		Name:           req.Name,
-		IsoCode:        req.ISOCode,
-		Flag:           req.Flag,
-		CurrencyName:   req.CurrencyName,
-		CurrencyCode:   req.CurrencyCode,
-		CurrencySymbol: req.CurrencySymbol,
-	})
+	country, err := qtx.CreateCountry(ctx, req.toCreateParams())
 	if err != nil {
 		return CountryResponse{}, common.TranslateDBError(err)
 	}
 	for _, channel := range req.PaymentChannels {
-		_, err = qtx.CreatePaymentChannel(ctx, db.CreatePaymentChannelParams{
-			Name:        channel.Name,
-			ChannelType: channel.ChannelType,
-			CountryID:   country.ID,
-		})
+		_, err = qtx.CreatePaymentChannel(ctx, channel.toCreateParams(country.ID))
 		if err != nil {
 			return CountryResponse{}, common.TranslateDBError(err)
 		}
@@ -112,6 +123,36 @@ func (s *Service) CreateCountry(ctx context.Context, req CreateCountryRequest) (
 		return CountryResponse{}, common.TranslateDBError(err)
 	}
 	return mapCountryToResponse(country), nil
+}
+
+func (s *Service) UpdateCountry(ctx context.Context, id int64, req UpdateCountryRequest) (CountryResponse, error) {
+	country, err := s.queries.UpdateCountry(ctx, req.toUpdateParams(id))
+	if err != nil {
+		return CountryResponse{}, common.TranslateDBError(err)
+	}
+	return mapCountryToResponse(country), nil
+}
+
+func (s *Service) DeleteCountry(ctx context.Context, id int64) error {
+	if _, err := s.queries.DeleteCountry(ctx, id); err != nil {
+		return common.TranslateDBError(err)
+	}
+	return nil
+}
+
+func (s *Service) UpdatePaymentChannel(ctx context.Context, id uuid.UUID, req UpdatePaymentChannelRequest) (PaymentChannelResponse, error) {
+	channel, err := s.queries.UpdatePaymentChannel(ctx, req.toUpdateParams(id))
+	if err != nil {
+		return PaymentChannelResponse{}, common.TranslateDBError(err)
+	}
+	return mapPaymentChannelToResponse(channel), nil
+}
+
+func (s *Service) DeletePaymentChannel(ctx context.Context, id uuid.UUID) error {
+	if _, err := s.queries.DeletePaymentChannel(ctx, id); err != nil {
+		return common.TranslateDBError(err)
+	}
+	return nil
 }
 
 func (s *Service) CreateRoute(ctx context.Context, req CreateRouteRequest) (RouteResponse, error) {

@@ -17,12 +17,14 @@ type Querier interface {
 	CreateRoute(ctx context.Context, arg CreateRouteParams) (Route, error)
 	CreateTransfer(ctx context.Context, arg CreateTransferParams) (uuid.UUID, error)
 	CreateTransferEvent(ctx context.Context, arg CreateTransferEventParams) (TransferEvent, error)
-	DeleteCountry(ctx context.Context, id int64) error
+	DeleteCountry(ctx context.Context, id int64) (Country, error)
+	DeletePaymentChannel(ctx context.Context, id uuid.UUID) (PaymentChannel, error)
 	DeleteRoute(ctx context.Context, id uuid.UUID) (Route, error)
 	DoesPaymentChannelExist(ctx context.Context, arg DoesPaymentChannelExistParams) (uuid.UUID, error)
 	GetActivePCByCountryTypeAndID(ctx context.Context, arg GetActivePCByCountryTypeAndIDParams) (PaymentChannel, error)
 	GetActivePaymentChannelsByCountryIDs(ctx context.Context, dollar_1 []int64) ([]GetActivePaymentChannelsByCountryIDsRow, error)
 	GetActiveRouteByCountries(ctx context.Context, arg GetActiveRouteByCountriesParams) (Route, error)
+	GetAdminCountryByID(ctx context.Context, id int64) (Country, error)
 	GetAllActiveRouteDestinations(ctx context.Context) ([]GetAllActiveRouteDestinationsRow, error)
 	GetAllCountries(ctx context.Context) ([]Country, error)
 	GetAllSourceCountries(ctx context.Context) ([]GetAllSourceCountriesRow, error)
@@ -34,6 +36,7 @@ type Querier interface {
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	GetPaymentChannelByCountryID(ctx context.Context, countryID int64) (PaymentChannel, error)
 	GetPaymentChannelByID(ctx context.Context, id uuid.UUID) (PaymentChannel, error)
+	GetPaymentChannelsByCountryID(ctx context.Context, countryID int64) ([]PaymentChannel, error)
 	GetTransferByID(ctx context.Context, id uuid.UUID) (GetTransferByIDRow, error)
 	GetTransferByReference(ctx context.Context, reference string) (GetTransferByReferenceRow, error)
 	GetTransferEventsByTransferID(ctx context.Context, transferID uuid.UUID) ([]TransferEvent, error)
@@ -43,6 +46,7 @@ type Querier interface {
 	ToggleRouteActive(ctx context.Context, id uuid.UUID) (Route, error)
 	TransitionTransferStatus(ctx context.Context, arg TransitionTransferStatusParams) (int64, error)
 	UpdateCountry(ctx context.Context, arg UpdateCountryParams) (Country, error)
+	UpdatePaymentChannel(ctx context.Context, arg UpdatePaymentChannelParams) (PaymentChannel, error)
 	UpdateRoute(ctx context.Context, arg UpdateRouteParams) (Route, error)
 }
 

@@ -4,6 +4,11 @@ FROM countries
 WHERE id = $1
     AND is_active = TRUE
     AND deleted_at IS NULL;
+-- name: GetAdminCountryByID :one
+SELECT *
+FROM countries
+WHERE id = $1
+    AND deleted_at IS NULL;
 -- name: GetAllCountries :many
 SELECT *
 FROM countries
@@ -29,12 +34,18 @@ SET name = $2,
     currency_name = $5,
     currency_code = $6,
     currency_symbol = $7,
-    is_active = $8
+    updated_at = now()
 WHERE id = $1
+    AND deleted_at IS NULL
 RETURNING *;
--- name: DeleteCountry :exec
-DELETE FROM countries
-WHERE id = $1;
+-- name: DeleteCountry :one
+UPDATE countries
+SET deleted_at = now(),
+    is_active = FALSE,
+    updated_at = now()
+WHERE id = $1
+    AND deleted_at IS NULL
+RETURNING *;
 -- name: GetPaymentChannelByCountryID :one
 SELECT *
 FROM payment_channels
@@ -43,9 +54,32 @@ WHERE country_id = $1;
 SELECT *
 FROM payment_channels
 WHERE id = $1;
+-- name: GetPaymentChannelsByCountryID :many
+SELECT *
+FROM payment_channels
+WHERE country_id = $1
+    AND deleted_at IS NULL
+ORDER BY channel_type,
+    name;
 -- name: CreatePaymentChannel :one
 INSERT INTO payment_channels (name, channel_type, country_id)
 VALUES ($1, $2, $3)
+RETURNING *;
+-- name: UpdatePaymentChannel :one
+UPDATE payment_channels
+SET name = $2,
+    channel_type = $3,
+    updated_at = now()
+WHERE id = $1
+    AND deleted_at IS NULL
+RETURNING *;
+-- name: DeletePaymentChannel :one
+UPDATE payment_channels
+SET deleted_at = now(),
+    is_active = FALSE,
+    updated_at = now()
+WHERE id = $1
+    AND deleted_at IS NULL
 RETURNING *;
 -- name: GetActiveRouteByCountries :one
 SELECT r.*

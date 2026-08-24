@@ -142,14 +142,59 @@ func (q *Queries) CreateRoute(ctx context.Context, arg CreateRouteParams) (Route
 	return i, err
 }
 
-const deleteCountry = `-- name: DeleteCountry :exec
-DELETE FROM countries
+const deleteCountry = `-- name: DeleteCountry :one
+UPDATE countries
+SET deleted_at = now(),
+    is_active = FALSE,
+    updated_at = now()
 WHERE id = $1
+    AND deleted_at IS NULL
+RETURNING id, name, iso_code, flag, is_active, currency_name, currency_code, currency_symbol, created_at, updated_at, deleted_at
 `
 
-func (q *Queries) DeleteCountry(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteCountry, id)
-	return err
+func (q *Queries) DeleteCountry(ctx context.Context, id int64) (Country, error) {
+	row := q.db.QueryRow(ctx, deleteCountry, id)
+	var i Country
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.IsoCode,
+		&i.Flag,
+		&i.IsActive,
+		&i.CurrencyName,
+		&i.CurrencyCode,
+		&i.CurrencySymbol,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const deletePaymentChannel = `-- name: DeletePaymentChannel :one
+UPDATE payment_channels
+SET deleted_at = now(),
+    is_active = FALSE,
+    updated_at = now()
+WHERE id = $1
+    AND deleted_at IS NULL
+RETURNING id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at
+`
+
+func (q *Queries) DeletePaymentChannel(ctx context.Context, id uuid.UUID) (PaymentChannel, error) {
+	row := q.db.QueryRow(ctx, deletePaymentChannel, id)
+	var i PaymentChannel
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ChannelType,
+		&i.IsActive,
+		&i.CountryID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
 }
 
 const deleteRoute = `-- name: DeleteRoute :one
@@ -320,6 +365,32 @@ func (q *Queries) GetActiveRouteByCountries(ctx context.Context, arg GetActiveRo
 		&i.EstimatedMinutes,
 		&i.MaxTransferAmount,
 		&i.MinTransferAmount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getAdminCountryByID = `-- name: GetAdminCountryByID :one
+SELECT id, name, iso_code, flag, is_active, currency_name, currency_code, currency_symbol, created_at, updated_at, deleted_at
+FROM countries
+WHERE id = $1
+    AND deleted_at IS NULL
+`
+
+func (q *Queries) GetAdminCountryByID(ctx context.Context, id int64) (Country, error) {
+	row := q.db.QueryRow(ctx, getAdminCountryByID, id)
+	var i Country
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.IsoCode,
+		&i.Flag,
+		&i.IsActive,
+		&i.CurrencyName,
+		&i.CurrencyCode,
+		&i.CurrencySymbol,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -669,6 +740,44 @@ func (q *Queries) GetPaymentChannelByID(ctx context.Context, id uuid.UUID) (Paym
 	return i, err
 }
 
+const getPaymentChannelsByCountryID = `-- name: GetPaymentChannelsByCountryID :many
+SELECT id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at
+FROM payment_channels
+WHERE country_id = $1
+    AND deleted_at IS NULL
+ORDER BY channel_type,
+    name
+`
+
+func (q *Queries) GetPaymentChannelsByCountryID(ctx context.Context, countryID int64) ([]PaymentChannel, error) {
+	rows, err := q.db.Query(ctx, getPaymentChannelsByCountryID, countryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PaymentChannel{}
+	for rows.Next() {
+		var i PaymentChannel
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.ChannelType,
+			&i.IsActive,
+			&i.CountryID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRoutes = `-- name: ListRoutes :many
 SELECT id, source_country_id, destination_country_id, is_active, default_exchange_rate, fee, fee_type, estimated_minutes, max_transfer_amount, min_transfer_amount, created_at, updated_at, deleted_at
 FROM routes
@@ -757,8 +866,9 @@ SET name = $2,
     currency_name = $5,
     currency_code = $6,
     currency_symbol = $7,
-    is_active = $8
+    updated_at = now()
 WHERE id = $1
+    AND deleted_at IS NULL
 RETURNING id, name, iso_code, flag, is_active, currency_name, currency_code, currency_symbol, created_at, updated_at, deleted_at
 `
 
@@ -770,7 +880,6 @@ type UpdateCountryParams struct {
 	CurrencyName   string
 	CurrencyCode   string
 	CurrencySymbol string
-	IsActive       bool
 }
 
 func (q *Queries) UpdateCountry(ctx context.Context, arg UpdateCountryParams) (Country, error) {
@@ -782,7 +891,6 @@ func (q *Queries) UpdateCountry(ctx context.Context, arg UpdateCountryParams) (C
 		arg.CurrencyName,
 		arg.CurrencyCode,
 		arg.CurrencySymbol,
-		arg.IsActive,
 	)
 	var i Country
 	err := row.Scan(
@@ -794,6 +902,38 @@ func (q *Queries) UpdateCountry(ctx context.Context, arg UpdateCountryParams) (C
 		&i.CurrencyName,
 		&i.CurrencyCode,
 		&i.CurrencySymbol,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const updatePaymentChannel = `-- name: UpdatePaymentChannel :one
+UPDATE payment_channels
+SET name = $2,
+    channel_type = $3,
+    updated_at = now()
+WHERE id = $1
+    AND deleted_at IS NULL
+RETURNING id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at
+`
+
+type UpdatePaymentChannelParams struct {
+	ID          uuid.UUID
+	Name        string
+	ChannelType ReceivingMethods
+}
+
+func (q *Queries) UpdatePaymentChannel(ctx context.Context, arg UpdatePaymentChannelParams) (PaymentChannel, error) {
+	row := q.db.QueryRow(ctx, updatePaymentChannel, arg.ID, arg.Name, arg.ChannelType)
+	var i PaymentChannel
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ChannelType,
+		&i.IsActive,
+		&i.CountryID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,

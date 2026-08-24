@@ -28,6 +28,20 @@ func (c *Controller) getCountries(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, countries)
 }
 
+func (c *Controller) getCountry(w http.ResponseWriter, r *http.Request) {
+	id, ok := c.parseCountryID(w, r)
+	if !ok {
+		return
+	}
+
+	country, err := c.svc.GetCountryByID(r.Context(), id)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, country)
+}
+
 func (c *Controller) getDestCountries(w http.ResponseWriter, r *http.Request) {
 	srcCountryID, err := strconv.ParseInt(chi.URLParam(r, "countryID"), 10, 64)
 	if err != nil || srcCountryID <= 0 {
@@ -55,6 +69,72 @@ func (c *Controller) createCountry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, country)
+}
+
+func (c *Controller) updateCountry(w http.ResponseWriter, r *http.Request) {
+	id, ok := c.parseCountryID(w, r)
+	if !ok {
+		return
+	}
+
+	body, err := httpx.DecodeAndValidate[UpdateCountryRequest](r)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	country, err := c.svc.UpdateCountry(r.Context(), id, body)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, country)
+}
+
+func (c *Controller) deleteCountry(w http.ResponseWriter, r *http.Request) {
+	id, ok := c.parseCountryID(w, r)
+	if !ok {
+		return
+	}
+
+	if err := c.svc.DeleteCountry(r.Context(), id); err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (c *Controller) updatePaymentChannel(w http.ResponseWriter, r *http.Request) {
+	id, ok := c.parseUUIDParam(w, r, "id", "payment channel id")
+	if !ok {
+		return
+	}
+
+	body, err := httpx.DecodeAndValidate[UpdatePaymentChannelRequest](r)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	channel, err := c.svc.UpdatePaymentChannel(r.Context(), id, body)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, channel)
+}
+
+func (c *Controller) deletePaymentChannel(w http.ResponseWriter, r *http.Request) {
+	id, ok := c.parseUUIDParam(w, r, "id", "payment channel id")
+	if !ok {
+		return
+	}
+
+	if err := c.svc.DeletePaymentChannel(r.Context(), id); err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (c *Controller) createRoute(w http.ResponseWriter, r *http.Request) {
@@ -148,9 +228,22 @@ func (c *Controller) toggleRouteActive(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Controller) parseRouteID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	return c.parseUUIDParam(w, r, "id", "route id")
+}
+
+func (c *Controller) parseCountryID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: invalid country id", httpx.BadRequestError))
+		return 0, false
+	}
+	return id, true
+}
+
+func (c *Controller) parseUUIDParam(w http.ResponseWriter, r *http.Request, key, label string) (uuid.UUID, bool) {
+	id, err := uuid.Parse(chi.URLParam(r, key))
 	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: invalid route id", httpx.BadRequestError))
+		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: invalid %s", httpx.BadRequestError, label))
 		return uuid.Nil, false
 	}
 	return id, true

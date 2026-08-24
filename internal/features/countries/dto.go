@@ -24,6 +24,11 @@ type CountryResponse struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
+type CountryDetailResponse struct {
+	CountryResponse
+	PaymentChannels []PaymentChannelResponse `json:"payment_channels"`
+}
+
 type PaymentChannelDTO struct {
 	ID   uuid.UUID `json:"id"`
 	Name string    `json:"name"`
@@ -59,18 +64,45 @@ type DestCountryResponse struct {
 }
 
 
-type CreatePaymentChannelRequest struct {
-	Name string `json:"name" validate:"required,min=3,max=255"`
+type countryAttrs struct {
+	Name           string `json:"name" validate:"required,min=3,max=255"`
+	ISOCode        string `json:"iso_code" validate:"required,min=2,max=3"`
+	Flag           string `json:"flag" validate:"required,min=1,max=16"`
+	CurrencyName   string `json:"currency_name" validate:"required"`
+	CurrencyCode   string `json:"currency_code" validate:"required,min=3,max=3"`
+	CurrencySymbol string `json:"currency_symbol" validate:"required,min=1,max=3"`
+}
+
+type paymentChannelAttrs struct {
+	Name        string              `json:"name" validate:"required,min=3,max=255"`
 	ChannelType db.ReceivingMethods `json:"channel_type" validate:"required,oneof=BANK MOBILE_MONEY"`
 }
+
+type CreatePaymentChannelRequest struct {
+	paymentChannelAttrs
+}
+
+type UpdatePaymentChannelRequest struct {
+	paymentChannelAttrs
+}
+
 type CreateCountryRequest struct {
-	Name string `json:"name" validate:"required,min=3,max=255"`
-	ISOCode string `json:"iso_code" validate:"required,min=2,max=3"`
-	Flag string `json:"flag" validate:"required,min=1,max=16"`
-	CurrencyName string `json:"currency_name" validate:"required"`
-	CurrencyCode string `json:"currency_code" validate:"required,min=3,max=3"`
-	CurrencySymbol string `json:"currency_symbol" validate:"required,min=1,max=3"`
-	PaymentChannels []*CreatePaymentChannelRequest `json:"payment_channels" validate:"required,omitempty"`
+	countryAttrs
+	PaymentChannels []CreatePaymentChannelRequest `json:"payment_channels" validate:"omitempty,dive"`
+}
+
+type UpdateCountryRequest struct {
+	countryAttrs
+}
+
+type PaymentChannelResponse struct {
+	ID          uuid.UUID           `json:"id"`
+	Name        string              `json:"name"`
+	ChannelType db.ReceivingMethods `json:"channel_type"`
+	CountryID   int64               `json:"country_id"`
+	IsActive    bool                `json:"is_active"`
+	CreatedAt   time.Time           `json:"created_at"`
+	UpdatedAt   time.Time           `json:"updated_at"`
 }
 
 type CreateRouteRequest struct {
@@ -125,6 +157,57 @@ func mapCountryToResponse(country db.Country) CountryResponse {
 		CurrencySymbol: country.CurrencySymbol,
 		CreatedAt:      country.CreatedAt,
 		UpdatedAt:      country.UpdatedAt,
+	}
+}
+
+func mapPaymentChannelToResponse(ch db.PaymentChannel) PaymentChannelResponse {
+	return PaymentChannelResponse{
+		ID:          ch.ID,
+		Name:        ch.Name,
+		ChannelType: ch.ChannelType,
+		CountryID:   ch.CountryID,
+		IsActive:    ch.IsActive,
+		CreatedAt:   ch.CreatedAt,
+		UpdatedAt:   ch.UpdatedAt,
+	}
+}
+
+func (a countryAttrs) toCreateParams() db.CreateCountryParams {
+	return db.CreateCountryParams{
+		Name:           a.Name,
+		IsoCode:        a.ISOCode,
+		Flag:           a.Flag,
+		CurrencyName:   a.CurrencyName,
+		CurrencyCode:   a.CurrencyCode,
+		CurrencySymbol: a.CurrencySymbol,
+	}
+}
+
+func (a countryAttrs) toUpdateParams(id int64) db.UpdateCountryParams {
+	return db.UpdateCountryParams{
+		ID:             id,
+		Name:           a.Name,
+		IsoCode:        a.ISOCode,
+		Flag:           a.Flag,
+		CurrencyName:   a.CurrencyName,
+		CurrencyCode:   a.CurrencyCode,
+		CurrencySymbol: a.CurrencySymbol,
+	}
+}
+
+func (a paymentChannelAttrs) toCreateParams(countryID int64) db.CreatePaymentChannelParams {
+	return db.CreatePaymentChannelParams{
+		Name:        a.Name,
+		ChannelType: a.ChannelType,
+		CountryID:   countryID,
+	}
+}
+
+func (a paymentChannelAttrs) toUpdateParams(id uuid.UUID) db.UpdatePaymentChannelParams {
+	return db.UpdatePaymentChannelParams{
+		ID:          id,
+		Name:        a.Name,
+		ChannelType: a.ChannelType,
 	}
 }
 
