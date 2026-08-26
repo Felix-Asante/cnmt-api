@@ -137,6 +137,31 @@ go run ./cmd/api
 
 The server listens on `HOST:PORT` (default `:8080`).
 
+### Database migrations
+
+Migrations in `db/migrations` are **embedded in the API binary**.
+
+```bash
+# Apply pending migrations (same as Railway Pre-Deploy)
+go run ./cmd/api migrate up
+# or
+make migrate-up-app
+
+# Show status
+go run ./cmd/api migrate status
+
+# Author a new SQL file with the goose CLI (local/dev)
+make migrate-create name=add_foo
+```
+
+**Railway:** set the service **Pre-Deploy Command** to:
+
+```bash
+./out migrate up
+```
+
+Keep the start command as `./out` (Railpack default). Pre-deploy runs once per release with `DATABASE_URL`; on failure the deployment does not proceed. Do not migrate in the start command (replica races). The binary supports `migrate up` and `migrate status` only — not `down`.
+
 ### sqlc
 
 After changing `db/queries/*.sql` or migrations that affect schema:

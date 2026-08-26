@@ -12,22 +12,61 @@ import (
 
 	"cnmt/internal/app"
 	"cnmt/internal/common/env"
+	"cnmt/internal/infra/migrate"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "migrate":
+			if err := runMigrate(os.Args[2:]); err != nil {
+				log.Fatalf("migrate: %v", err)
+			}
+			return
+		case "help", "-h", "--help":
+			printUsage()
+			return
+		}
+	}
+
+	runServer()
+}
+
+func runMigrate(args []string) error {
+	databaseURL := env.GetString("DATABASE_URL", "")
+	cmd := "up"
+	if len(args) > 0 {
+		cmd = args[0]
+	}
+
+	switch cmd {
+	case "up":
+		log.Println("running migrations...")
+		if err := migrate.Up(databaseURL); err != nil {
+			return err
+		}
+		log.Println("migrations applied")
+		return nil
+	case "status":
+		return migrate.Status(databaseURL)
+	default:
+		return fmt.Errorf("unknown migrate command %q (supported: up, status)", cmd)
+	}
+}
+
+func runServer() {
 	ctx := context.Background()
 	dbConn, err := pgxpool.New(ctx, env.GetString("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/cnmt"))
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
-
 	defer dbConn.Close()
 
-	app := app.NewApp(dbConn)
+	application := app.NewApp(dbConn)
 
-	r, err := app.Run()
+	r, err := application.Run()
 	if err != nil {
 		log.Fatalf("failed to run app: %v", err)
 	}
@@ -40,7 +79,6 @@ func main() {
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %v", err)
-			os.Exit(1)
 		}
 	}()
 
@@ -54,4 +92,20 @@ func main() {
 		log.Fatalf("Server shutdown error: %v", err)
 	}
 	log.Println("Server shut down gracefully")
+}
+
+func printUsage() {
+	fmt.Fprintf(os.Stderr, `cnmt api
+
+Usage:
+  api                 Start the HTTP server
+  api migrate         Apply pending migrations (goose up)
+  api migrate up      Same as migrate
+  api migrate status  Show migration status
+
+Environment:
+  DATABASE_URL        Postgres connection string (required for migrate)
+  HOST                Listen host (default empty = all interfaces)
+  PORT                Listen port (default 8080)
+`)
 }
