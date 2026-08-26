@@ -132,7 +132,7 @@ A seed migration (`005_seed_countries.sql`) loads sample corridors and payment c
 ### Run
 
 ```bash
-go run ./cmd
+go run ./cmd/api
 ```
 
 The server listens on `HOST:PORT` (default `:8080`).

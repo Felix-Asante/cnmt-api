@@ -2,16 +2,16 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
-
-	"cnmt/internal/app"
-	"cnmt/internal/common/env"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"cnmt/internal/app"
+	"cnmt/internal/common/env"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -22,7 +22,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
-    
+
 	defer dbConn.Close()
 
 	app := app.NewApp(dbConn)
