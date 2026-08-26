@@ -8,47 +8,47 @@ import (
 	"github.com/joho/godotenv"
 )
 
+
 func Load() error {
 	return godotenv.Load()
 }
 
 func GetString(key string, defaultValue string) string {
-	if err := Load(); err != nil {
+	_ = godotenv.Load()
+
+	value := os.Getenv(key)
+	if strings.TrimSpace(value) == "" {
 		return defaultValue
 	}
-	env := os.Getenv(key)
-
-	if strings.TrimSpace(env) == "" {
-		return defaultValue
-	}
-
-	return env
+	return value
 }
 
 func GetInt(key string, defaultValue int) int {
-	env := os.Getenv(key)
-	if strings.TrimSpace(env) == "" {
+	_ = godotenv.Load()
+
+	value := os.Getenv(key)
+	if strings.TrimSpace(value) == "" {
 		return defaultValue
 	}
 
-	intValue, err := strconv.Atoi(env)
+	intValue, err := strconv.Atoi(value)
 	if err != nil {
 		return defaultValue
 	}
-
 	return intValue
 }
 
 func GetBool(key string, defaultValue bool) bool {
-	env := os.Getenv(key)
-	if strings.TrimSpace(env) == "" {
+	_ = godotenv.Load()
+
+	value := os.Getenv(key)
+	if strings.TrimSpace(value) == "" {
 		return defaultValue
 	}
 
-	boolValue, err := strconv.ParseBool(env)
+	boolValue, err := strconv.ParseBool(value)
 	if err != nil {
 		return defaultValue
 	}
-
 	return boolValue
 }
