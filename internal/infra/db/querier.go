@@ -6,6 +6,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -17,6 +18,15 @@ type Querier interface {
 	CreateRoute(ctx context.Context, arg CreateRouteParams) (Route, error)
 	CreateTransfer(ctx context.Context, arg CreateTransferParams) (uuid.UUID, error)
 	CreateTransferEvent(ctx context.Context, arg CreateTransferEventParams) (TransferEvent, error)
+	DashboardActionRequiredCounts(ctx context.Context, expiringBefore time.Time) (DashboardActionRequiredCountsRow, error)
+	DashboardActionRequiredTransfers(ctx context.Context, arg DashboardActionRequiredTransfersParams) ([]DashboardActionRequiredTransfersRow, error)
+	DashboardDailyVolume(ctx context.Context, arg DashboardDailyVolumeParams) ([]DashboardDailyVolumeRow, error)
+	DashboardMoneyTotals(ctx context.Context, arg DashboardMoneyTotalsParams) ([]DashboardMoneyTotalsRow, error)
+	DashboardRecentActivity(ctx context.Context, rowLimit int32) ([]DashboardRecentActivityRow, error)
+	DashboardRecentTransfers(ctx context.Context, arg DashboardRecentTransfersParams) ([]DashboardRecentTransfersRow, error)
+	DashboardStatusCounts(ctx context.Context, arg DashboardStatusCountsParams) ([]DashboardStatusCountsRow, error)
+	// Ranked by transfer_count (most-used corridors in the period).
+	DashboardTopRoutes(ctx context.Context, arg DashboardTopRoutesParams) ([]DashboardTopRoutesRow, error)
 	DeleteCountry(ctx context.Context, id int64) (Country, error)
 	DeletePaymentChannel(ctx context.Context, id uuid.UUID) (PaymentChannel, error)
 	DeleteRoute(ctx context.Context, id uuid.UUID) (Route, error)

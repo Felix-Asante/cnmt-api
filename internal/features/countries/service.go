@@ -140,6 +140,22 @@ func (s *Service) DeleteCountry(ctx context.Context, id int64) error {
 	return nil
 }
 
+func (s *Service) CreatePaymentChannel(
+	ctx context.Context,
+	countryID int64,
+	req CreatePaymentChannelRequest,
+) (PaymentChannelResponse, error) {
+	if _, err := s.queries.GetAdminCountryByID(ctx, countryID); err != nil {
+		return PaymentChannelResponse{}, common.TranslateDBError(err)
+	}
+
+	channel, err := s.queries.CreatePaymentChannel(ctx, req.toCreateParams(countryID))
+	if err != nil {
+		return PaymentChannelResponse{}, common.TranslateDBError(err)
+	}
+	return mapPaymentChannelToResponse(channel), nil
+}
+
 func (s *Service) UpdatePaymentChannel(ctx context.Context, id uuid.UUID, req UpdatePaymentChannelRequest) (PaymentChannelResponse, error) {
 	channel, err := s.queries.UpdatePaymentChannel(ctx, req.toUpdateParams(id))
 	if err != nil {

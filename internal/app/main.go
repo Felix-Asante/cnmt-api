@@ -8,6 +8,7 @@ import (
 	"cnmt/internal/common/env"
 	"cnmt/internal/common/httpx"
 	"cnmt/internal/features/countries"
+	"cnmt/internal/features/dashboard"
 	"cnmt/internal/features/transfers"
 	"cnmt/internal/infra/db"
 	"cnmt/internal/infra/storage"
@@ -87,11 +88,13 @@ func initRoutes(r *chi.Mux, config RoutesConfig) {
 
 	transferCtrl := transfers.NewController(transfers.NewService(config.dbConn, dbQueries, config.objStorage, config.logger))
 	countryCtrl := countries.NewController(countries.NewService(dbQueries, config.logger, config.dbConn))
+	dashboardCtrl := dashboard.NewController(dashboard.NewService(dbQueries, config.logger))
 
 	r.Route("/api/v1", func(r chi.Router) {
 		transferCtrl.Routes(r)
 		transferCtrl.AdminRoutes(r)
 		countryCtrl.Routes(r)
 		countryCtrl.AdminRoutes(r)
+		dashboardCtrl.AdminRoutes(r)
 	})
 }

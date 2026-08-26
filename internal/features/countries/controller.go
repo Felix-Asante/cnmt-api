@@ -104,6 +104,26 @@ func (c *Controller) deleteCountry(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (c *Controller) createPaymentChannel(w http.ResponseWriter, r *http.Request) {
+	countryID, ok := c.parseCountryID(w, r)
+	if !ok {
+		return
+	}
+
+	body, err := httpx.DecodeAndValidate[CreatePaymentChannelRequest](r)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	channel, err := c.svc.CreatePaymentChannel(r.Context(), countryID, body)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, channel)
+}
+
 func (c *Controller) updatePaymentChannel(w http.ResponseWriter, r *http.Request) {
 	id, ok := c.parseUUIDParam(w, r, "id", "payment channel id")
 	if !ok {

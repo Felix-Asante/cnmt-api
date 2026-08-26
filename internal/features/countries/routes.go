@@ -16,6 +16,7 @@ func (c *Controller) AdminRoutes(r chi.Router) {
 			r.Get("/", c.getCountry)
 			r.Patch("/", c.updateCountry)
 			r.Delete("/", c.deleteCountry)
+			r.Post("/payment-channels", c.createPaymentChannel)
 		})
 	})
 	r.Route("/admin/payment-channels", func(r chi.Router) {
