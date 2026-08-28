@@ -18,6 +18,7 @@ type Querier interface {
 	CreateRoute(ctx context.Context, arg CreateRouteParams) (Route, error)
 	CreateTransfer(ctx context.Context, arg CreateTransferParams) (uuid.UUID, error)
 	CreateTransferEvent(ctx context.Context, arg CreateTransferEventParams) (TransferEvent, error)
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DashboardActionRequiredCounts(ctx context.Context, expiringBefore time.Time) (DashboardActionRequiredCountsRow, error)
 	DashboardActionRequiredTransfers(ctx context.Context, arg DashboardActionRequiredTransfersParams) ([]DashboardActionRequiredTransfersRow, error)
 	DashboardDailyVolume(ctx context.Context, arg DashboardDailyVolumeParams) ([]DashboardDailyVolumeRow, error)
@@ -50,6 +51,8 @@ type Querier interface {
 	GetTransferByID(ctx context.Context, id uuid.UUID) (GetTransferByIDRow, error)
 	GetTransferByReference(ctx context.Context, reference string) (GetTransferByReferenceRow, error)
 	GetTransferEventsByTransferID(ctx context.Context, transferID uuid.UUID) ([]TransferEvent, error)
+	GetUserByEmail(ctx context.Context, email string) (User, error)
+	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) (IdempotencyKey, error)
 	ListRoutes(ctx context.Context, arg ListRoutesParams) ([]Route, error)
 	SetPaymentProofKey(ctx context.Context, arg SetPaymentProofKeyParams) error

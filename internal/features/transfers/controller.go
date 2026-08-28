@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"cnmt/internal/common/httpx"
+	"cnmt/internal/features/auth"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -103,8 +104,6 @@ func (c *Controller) confirmPaymentProof(w http.ResponseWriter, r *http.Request)
 	httpx.WriteJSON(w, http.StatusOK,map[string]bool{"success": true})
 }
 
-const tempAdminActor = "admin"
-
 func (c *Controller) parseTransferID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	raw := chi.URLParam(r, "id")
 	id, err := uuid.Parse(raw)
@@ -121,7 +120,7 @@ func (c *Controller) verifyPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := c.svc.VerifyPayment(r.Context(), id, tempAdminActor)
+	resp, err := c.svc.VerifyPayment(r.Context(), id, auth.ActorFromContext(r.Context()))
 	if err != nil {
 		httpx.WriteError(w, httpx.StatusFromError(err), err)
 		return
@@ -145,7 +144,7 @@ func (c *Controller) rejectPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := c.svc.RejectPayment(r.Context(), id, tempAdminActor, *body.Reason)
+	resp, err := c.svc.RejectPayment(r.Context(), id, auth.ActorFromContext(r.Context()), *body.Reason)
 	if err != nil {
 		httpx.WriteError(w, httpx.StatusFromError(err), err)
 		return
@@ -159,7 +158,7 @@ func (c *Controller) processTransfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := c.svc.ProcessTransfer(r.Context(), id, tempAdminActor)
+	resp, err := c.svc.ProcessTransfer(r.Context(), id, auth.ActorFromContext(r.Context()))
 	if err != nil {
 		httpx.WriteError(w, httpx.StatusFromError(err), err)
 		return
@@ -173,7 +172,7 @@ func (c *Controller) completeTransfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := c.svc.CompleteTransfer(r.Context(), id, tempAdminActor)
+	resp, err := c.svc.CompleteTransfer(r.Context(), id, auth.ActorFromContext(r.Context()))
 	if err != nil {
 		httpx.WriteError(w, httpx.StatusFromError(err), err)
 		return
@@ -197,7 +196,7 @@ func (c *Controller) cancelTransfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := c.svc.CancelTransfer(r.Context(), id, tempAdminActor, *body.Reason)
+	resp, err := c.svc.CancelTransfer(r.Context(), id, auth.ActorFromContext(r.Context()), *body.Reason)
 	if err != nil {
 		httpx.WriteError(w, httpx.StatusFromError(err), err)
 		return

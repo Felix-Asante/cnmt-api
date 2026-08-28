@@ -7,6 +7,7 @@ import (
 
 	"cnmt/internal/common/env"
 	"cnmt/internal/common/httpx"
+	"cnmt/internal/features/auth"
 	"cnmt/internal/features/countries"
 	"cnmt/internal/features/dashboard"
 	"cnmt/internal/features/transfers"
@@ -16,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/go-chi/jwtauth/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -86,15 +88,37 @@ type RoutesConfig struct {
 func initRoutes(r *chi.Mux, config RoutesConfig) {
 	dbQueries := db.New(config.dbConn)
 
+	jwtSecret := env.GetString("JWT_SECRET", "")
+	if len(jwtSecret) < 32 {
+		panic("auth: JWT_SECRET must be at least 32 characters")
+	}
+
+	tokenTTL := time.Duration(env.GetInt("JWT_ACCESS_TTL", 86400)) * time.Second
+	jwtAuth := jwtauth.New("HS256", []byte(jwtSecret), nil)
+
+	authSvc := auth.NewService(dbQueries, config.logger, jwtAuth, tokenTTL)
+	authMiddleware := auth.NewMiddleware(authSvc, jwtAuth)
+	authCtrl := auth.NewController(authSvc)
+
 	transferCtrl := transfers.NewController(transfers.NewService(config.dbConn, dbQueries, config.objStorage, config.logger))
 	countryCtrl := countries.NewController(countries.NewService(dbQueries, config.logger, config.dbConn))
 	dashboardCtrl := dashboard.NewController(dashboard.NewService(dbQueries, config.logger))
 
 	r.Route("/api/v1", func(r chi.Router) {
 		transferCtrl.Routes(r)
-		transferCtrl.AdminRoutes(r)
 		countryCtrl.Routes(r)
-		countryCtrl.AdminRoutes(r)
-		dashboardCtrl.AdminRoutes(r)
+		authCtrl.Routes(r)
+
+		r.Group(func(r chi.Router) {
+			r.Use(authMiddleware.Verifier())
+			r.Use(authMiddleware.AuthenticateUser)
+			r.Group(func(r chi.Router) {
+				r.Use(authMiddleware.RequireRole(auth.RoleAdmin))
+				transferCtrl.AdminRoutes(r)
+				countryCtrl.AdminRoutes(r)
+				dashboardCtrl.AdminRoutes(r)
+				authCtrl.AuthenticatedRoutes(r)
+			})
+		})
 	})
 }
