@@ -13,6 +13,7 @@ import (
 	"cnmt/internal/app"
 	"cnmt/internal/common/env"
 	"cnmt/internal/infra/migrate"
+	"cnmt/internal/infra/workers"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -64,6 +65,17 @@ func runServer() {
 	}
 	defer dbConn.Close()
 
+	workerFct := workers.NewWorkers(dbConn)
+	workerClient,workerErr := workerFct.Init()
+
+	if workerErr != nil {
+		log.Fatalf("failed to initialize workers: %v", workerErr)
+	}
+
+	if err := workerClient.Start(ctx); err != nil {
+		log.Fatalf("failed to start workers: %v", err)
+	}
+
 	application := app.NewApp(dbConn)
 
 	r, err := application.Run()
@@ -86,11 +98,18 @@ func runServer() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("Shutting down server...")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("Server shutdown error: %v", err)
 	}
+
+	// Stop worker client after HTTP server so in-flight requests can still enqueue jobs.
+	if err := workerClient.Stop(shutdownCtx); err != nil {
+		log.Printf("Worker shutdown error: %v", err)
+	}
+
 	log.Println("Server shut down gracefully")
 }
 

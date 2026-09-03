@@ -18,3 +18,9 @@ migrate-create:
 
 migrate-down:
 	goose -dir db/migrations postgres "$(DATABASE_URL)" down
+
+river-migrate-up:
+	river migrate-up --database-url "$(DATABASE_URL)"
+
+river-migrate-down:
+	river migrate-down --line main --database-url "$(DATABASE_URL)" --max-steps 10

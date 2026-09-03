@@ -1,17 +1,21 @@
 package migrate
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
 	"cnmt/db/migrations"
 
 	"github.com/pressly/goose/v3"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivermigrate"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-// Up applies all pending migrations.
+// Up applies all pending migrations (goose + river).
 func Up(databaseURL string) error {
 	db, err := open(databaseURL)
 	if err != nil {
@@ -22,6 +26,11 @@ func Up(databaseURL string) error {
 	if err := goose.Up(db, "."); err != nil {
 		return fmt.Errorf("migrate up: %w", err)
 	}
+
+	if err := riverUp(databaseURL); err != nil {
+		return fmt.Errorf("river migrate up: %w", err)
+	}
+
 	return nil
 }
 
@@ -59,4 +68,25 @@ func open(databaseURL string) (*sql.DB, error) {
 		return nil, fmt.Errorf("set dialect: %w", err)
 	}
 	return db, nil
+}
+
+func riverUp(databaseURL string) error {
+	ctx := context.Background()
+
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		return fmt.Errorf("open pgxpool for river: %w", err)
+	}
+	defer pool.Close()
+
+	migrator, err := rivermigrate.New(riverpgxv5.New(pool), nil)
+	if err != nil {
+		return fmt.Errorf("create river migrator: %w", err)
+	}
+
+	if _, err := migrator.Migrate(ctx, rivermigrate.DirectionUp, nil); err != nil {
+		return fmt.Errorf("apply river migrations: %w", err)
+	}
+
+	return nil
 }
