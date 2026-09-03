@@ -30,6 +30,7 @@ type Querier interface {
 	// Ranked by transfer_count (most-used corridors in the period).
 	DashboardTopRoutes(ctx context.Context, arg DashboardTopRoutesParams) ([]DashboardTopRoutesRow, error)
 	DeleteCountry(ctx context.Context, id int64) (Country, error)
+	DeletePaymentAccount(ctx context.Context, id uuid.UUID) (PaymentAccount, error)
 	DeletePaymentChannel(ctx context.Context, id uuid.UUID) (PaymentChannel, error)
 	DeleteRoute(ctx context.Context, id uuid.UUID) (Route, error)
 	DoesPaymentChannelExist(ctx context.Context, arg DoesPaymentChannelExistParams) (uuid.UUID, error)
@@ -46,6 +47,7 @@ type Querier interface {
 	GetCountryByName(ctx context.Context, name string) (Country, error)
 	GetDestCountriesBySrcCountryID(ctx context.Context, sourceCountryID int64) ([]GetDestCountriesBySrcCountryIDRow, error)
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
+	GetPaymentAccountByID(ctx context.Context, id uuid.UUID) (GetPaymentAccountByIDRow, error)
 	GetPaymentChannelByCountryID(ctx context.Context, countryID int64) (PaymentChannel, error)
 	GetPaymentChannelByID(ctx context.Context, id uuid.UUID) (PaymentChannel, error)
 	GetPaymentChannelsByCountryID(ctx context.Context, countryID int64) ([]PaymentChannel, error)
@@ -57,10 +59,12 @@ type Querier interface {
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) (IdempotencyKey, error)
 	ListActivePaymentAccountsByCountryID(ctx context.Context, countryID int64) ([]ListActivePaymentAccountsByCountryIDRow, error)
 	ListRoutes(ctx context.Context, arg ListRoutesParams) ([]Route, error)
+	SetPaymentAccountActive(ctx context.Context, arg SetPaymentAccountActiveParams) (PaymentAccount, error)
 	SetPaymentProofKey(ctx context.Context, arg SetPaymentProofKeyParams) error
 	ToggleRouteActive(ctx context.Context, id uuid.UUID) (Route, error)
 	TransitionTransferStatus(ctx context.Context, arg TransitionTransferStatusParams) (int64, error)
 	UpdateCountry(ctx context.Context, arg UpdateCountryParams) (Country, error)
+	UpdatePaymentAccount(ctx context.Context, arg UpdatePaymentAccountParams) (PaymentAccount, error)
 	UpdatePaymentChannel(ctx context.Context, arg UpdatePaymentChannelParams) (PaymentChannel, error)
 	UpdateRoute(ctx context.Context, arg UpdateRouteParams) (Route, error)
 }

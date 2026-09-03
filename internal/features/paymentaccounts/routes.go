@@ -9,5 +9,11 @@ func (c *Controller) Routes(r chi.Router) {
 func (c *Controller) AdminRoutes(r chi.Router) {
 	r.Route("/admin/payment-accounts", func(r chi.Router) {
 		r.Post("/", c.create)
+		r.Route("/{id}", func(r chi.Router) {
+			r.Patch("/", c.update)
+			r.Delete("/", c.delete)
+			r.Post("/activate", c.activate)
+			r.Post("/deactivate", c.deactivate)
+		})
 	})
 }

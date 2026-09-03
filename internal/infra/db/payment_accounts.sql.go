@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -72,6 +73,103 @@ func (q *Queries) CreatePaymentAccount(ctx context.Context, arg CreatePaymentAcc
 		&i.PhoneNumber,
 		&i.SortCode,
 		&i.Iban,
+	)
+	return i, err
+}
+
+const deletePaymentAccount = `-- name: DeletePaymentAccount :one
+UPDATE payment_accounts
+SET deleted_at = now(),
+    is_active = FALSE,
+    updated_at = now()
+WHERE id = $1
+    AND deleted_at IS NULL
+RETURNING id, country_id, payment_method, name, account_name, account_number, payment_channel_id, currency_code, is_active, created_at, updated_at, deleted_at, phone_number, sort_code, iban
+`
+
+func (q *Queries) DeletePaymentAccount(ctx context.Context, id uuid.UUID) (PaymentAccount, error) {
+	row := q.db.QueryRow(ctx, deletePaymentAccount, id)
+	var i PaymentAccount
+	err := row.Scan(
+		&i.ID,
+		&i.CountryID,
+		&i.PaymentMethod,
+		&i.Name,
+		&i.AccountName,
+		&i.AccountNumber,
+		&i.PaymentChannelID,
+		&i.CurrencyCode,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.PhoneNumber,
+		&i.SortCode,
+		&i.Iban,
+	)
+	return i, err
+}
+
+const getPaymentAccountByID = `-- name: GetPaymentAccountByID :one
+SELECT pa.id,
+    pa.country_id,
+    pa.payment_method,
+    pa.name,
+    pa.account_name,
+    pa.account_number,
+    pa.phone_number,
+    pa.sort_code,
+    pa.iban,
+    pa.payment_channel_id,
+    pa.currency_code,
+    pa.is_active,
+    pa.created_at,
+    pa.updated_at,
+    pc.name AS channel_name
+FROM payment_accounts pa
+    LEFT JOIN payment_channels pc ON pc.id = pa.payment_channel_id
+    AND pc.deleted_at IS NULL
+WHERE pa.id = $1
+    AND pa.deleted_at IS NULL
+`
+
+type GetPaymentAccountByIDRow struct {
+	ID               uuid.UUID
+	CountryID        int64
+	PaymentMethod    ReceivingMethods
+	Name             string
+	AccountName      string
+	AccountNumber    *string
+	PhoneNumber      *string
+	SortCode         *string
+	Iban             *string
+	PaymentChannelID pgtype.UUID
+	CurrencyCode     string
+	IsActive         bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	ChannelName      *string
+}
+
+func (q *Queries) GetPaymentAccountByID(ctx context.Context, id uuid.UUID) (GetPaymentAccountByIDRow, error) {
+	row := q.db.QueryRow(ctx, getPaymentAccountByID, id)
+	var i GetPaymentAccountByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.CountryID,
+		&i.PaymentMethod,
+		&i.Name,
+		&i.AccountName,
+		&i.AccountNumber,
+		&i.PhoneNumber,
+		&i.SortCode,
+		&i.Iban,
+		&i.PaymentChannelID,
+		&i.CurrencyCode,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ChannelName,
 	)
 	return i, err
 }
@@ -142,4 +240,102 @@ func (q *Queries) ListActivePaymentAccountsByCountryID(ctx context.Context, coun
 		return nil, err
 	}
 	return items, nil
+}
+
+const setPaymentAccountActive = `-- name: SetPaymentAccountActive :one
+UPDATE payment_accounts
+SET is_active = $2,
+    updated_at = now()
+WHERE id = $1
+    AND deleted_at IS NULL
+RETURNING id, country_id, payment_method, name, account_name, account_number, payment_channel_id, currency_code, is_active, created_at, updated_at, deleted_at, phone_number, sort_code, iban
+`
+
+type SetPaymentAccountActiveParams struct {
+	ID       uuid.UUID
+	IsActive bool
+}
+
+func (q *Queries) SetPaymentAccountActive(ctx context.Context, arg SetPaymentAccountActiveParams) (PaymentAccount, error) {
+	row := q.db.QueryRow(ctx, setPaymentAccountActive, arg.ID, arg.IsActive)
+	var i PaymentAccount
+	err := row.Scan(
+		&i.ID,
+		&i.CountryID,
+		&i.PaymentMethod,
+		&i.Name,
+		&i.AccountName,
+		&i.AccountNumber,
+		&i.PaymentChannelID,
+		&i.CurrencyCode,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.PhoneNumber,
+		&i.SortCode,
+		&i.Iban,
+	)
+	return i, err
+}
+
+const updatePaymentAccount = `-- name: UpdatePaymentAccount :one
+UPDATE payment_accounts
+SET name = $2,
+    account_name = $3,
+    account_number = $4,
+    phone_number = $5,
+    sort_code = $6,
+    iban = $7,
+    payment_channel_id = $8,
+    currency_code = $9,
+    updated_at = now()
+WHERE id = $1
+    AND deleted_at IS NULL
+RETURNING id, country_id, payment_method, name, account_name, account_number, payment_channel_id, currency_code, is_active, created_at, updated_at, deleted_at, phone_number, sort_code, iban
+`
+
+type UpdatePaymentAccountParams struct {
+	ID               uuid.UUID
+	Name             string
+	AccountName      string
+	AccountNumber    *string
+	PhoneNumber      *string
+	SortCode         *string
+	Iban             *string
+	PaymentChannelID pgtype.UUID
+	CurrencyCode     string
+}
+
+func (q *Queries) UpdatePaymentAccount(ctx context.Context, arg UpdatePaymentAccountParams) (PaymentAccount, error) {
+	row := q.db.QueryRow(ctx, updatePaymentAccount,
+		arg.ID,
+		arg.Name,
+		arg.AccountName,
+		arg.AccountNumber,
+		arg.PhoneNumber,
+		arg.SortCode,
+		arg.Iban,
+		arg.PaymentChannelID,
+		arg.CurrencyCode,
+	)
+	var i PaymentAccount
+	err := row.Scan(
+		&i.ID,
+		&i.CountryID,
+		&i.PaymentMethod,
+		&i.Name,
+		&i.AccountName,
+		&i.AccountNumber,
+		&i.PaymentChannelID,
+		&i.CurrencyCode,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.PhoneNumber,
+		&i.SortCode,
+		&i.Iban,
+	)
+	return i, err
 }
