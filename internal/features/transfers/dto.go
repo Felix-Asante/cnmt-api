@@ -39,9 +39,16 @@ type recipientDTO struct {
 }
 
 type createTransferResponse struct {
-	TransferID uuid.UUID `json:"transfer_id"`
-	Reference  string    `json:"reference"`
-	ExpiresIn  int64     `json:"expires_in"`
+	TransferID                 uuid.UUID `json:"transfer_id"`
+	Reference                  string    `json:"reference"`
+	ExpiresIn                  int64     `json:"expires_in"`
+	SourceCountryName          string    `json:"-"`
+	DestinationCountryName     string    `json:"-"`
+	SourceCountryCurrency      string    `json:"-"`
+	DestinationCountryCurrency string    `json:"-"`
+	Fee                        string    `json:"-"`
+	AmountPaid                 string    `json:"-"`
+	AmountReceived             string    `json:"-"`
 }
 
 type countryDTO struct {

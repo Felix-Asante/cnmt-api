@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -14,16 +15,24 @@ import (
 	"cnmt/internal/features/transfers"
 	"cnmt/internal/infra/db"
 	"cnmt/internal/infra/storage"
+	"cnmt/internal/infra/workers"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/jwtauth/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
 )
 
 type AppConfig struct {
 	dbConn *pgxpool.Pool
+}
+
+type App struct {
+	Router *chi.Mux
+	WorkerClient *river.Client[pgx.Tx]
 }
 
 func NewApp(dbConn *pgxpool.Pool) *AppConfig {
@@ -32,7 +41,7 @@ func NewApp(dbConn *pgxpool.Pool) *AppConfig {
 	}
 }
 
-func (app *AppConfig) Run() (*chi.Mux, error) {
+func (app *AppConfig) Run() (*App, error) {
 	r := chi.NewRouter()
 
 	level := slog.LevelInfo
@@ -49,9 +58,19 @@ func (app *AppConfig) Run() (*chi.Mux, error) {
 
 	objStorage, err := storage.NewObjStorage(urlTTL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to initialize object storage: %v", err)
 	}
 
+	dbQueries := db.New(app.dbConn)
+
+	workerFct := workers.NewWorkers(app.dbConn)
+	workerClient, workerErr := workerFct.Init()
+
+	if workerErr != nil {
+		return nil, fmt.Errorf("failed to initialize workers: %v", workerErr)
+	}
+
+	
 	httpx.InitValidator()
 
 	r.Use(middleware.Logger)
@@ -70,24 +89,27 @@ func (app *AppConfig) Run() (*chi.Mux, error) {
 	}))
 
 	config := RoutesConfig{
-		dbConn:     app.dbConn,
-		objStorage: objStorage,
-		logger:     logger,
+		dbConn:       app.dbConn,
+		dbQueries:    dbQueries,
+		objStorage:   objStorage,
+		logger:       logger,
+		workerClient: workerClient,
 	}
 
 	initRoutes(r, config)
 
-	return r, nil
+	return &App{Router: r, WorkerClient: workerClient}, nil
 }
 
 type RoutesConfig struct {
 	dbConn     *pgxpool.Pool
+	dbQueries *db.Queries
 	objStorage *storage.ObjStorage
 	logger     *slog.Logger
+	workerClient *river.Client[pgx.Tx]
 }
 
 func initRoutes(r *chi.Mux, config RoutesConfig) {
-	dbQueries := db.New(config.dbConn)
 
 	jwtSecret := env.GetString("JWT_SECRET", "")
 	if len(jwtSecret) < 32 {
@@ -97,14 +119,21 @@ func initRoutes(r *chi.Mux, config RoutesConfig) {
 	tokenTTL := time.Duration(env.GetInt("JWT_ACCESS_TTL", 86400)) * time.Second
 	jwtAuth := jwtauth.New("HS256", []byte(jwtSecret), nil)
 
-	authSvc := auth.NewService(dbQueries, config.logger, jwtAuth, tokenTTL)
+	authSvc := auth.NewService(config.dbQueries, config.logger, jwtAuth, tokenTTL)
 	authMiddleware := auth.NewMiddleware(authSvc, jwtAuth)
 	authCtrl := auth.NewController(authSvc)
 
-	transferCtrl := transfers.NewController(transfers.NewService(config.dbConn, dbQueries, config.objStorage, config.logger))
-	countryCtrl := countries.NewController(countries.NewService(dbQueries, config.logger, config.dbConn))
-	paymentAccountCtrl := paymentaccounts.NewController(paymentaccounts.NewService(dbQueries, config.logger))
-	dashboardCtrl := dashboard.NewController(dashboard.NewService(dbQueries, config.logger))
+	transferServiceConfig := transfers.ServiceConfig{
+		DB:           config.dbConn,
+		Queries:      config.dbQueries,
+		ObjStorage:   config.objStorage,
+		Logger:       config.logger,
+		WorkerClient: config.workerClient,
+	}
+	transferCtrl := transfers.NewController(transfers.NewService(transferServiceConfig))
+	countryCtrl := countries.NewController(countries.NewService(config.dbQueries, config.logger, config.dbConn))
+	paymentAccountCtrl := paymentaccounts.NewController(paymentaccounts.NewService(config.dbQueries, config.logger))
+	dashboardCtrl := dashboard.NewController(dashboard.NewService(config.dbQueries, config.logger))
 
 	r.Route("/api/v1", func(r chi.Router) {
 		transferCtrl.Routes(r)

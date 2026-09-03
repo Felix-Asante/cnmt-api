@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -332,7 +333,11 @@ func (q *Queries) GetActivePaymentChannelsByCountryIDs(ctx context.Context, doll
 }
 
 const getActiveRouteByCountries = `-- name: GetActiveRouteByCountries :one
-SELECT r.id, r.source_country_id, r.destination_country_id, r.is_active, r.default_exchange_rate, r.fee, r.fee_type, r.estimated_minutes, r.max_transfer_amount, r.min_transfer_amount, r.created_at, r.updated_at, r.deleted_at
+SELECT r.id, r.source_country_id, r.destination_country_id, r.is_active, r.default_exchange_rate, r.fee, r.fee_type, r.estimated_minutes, r.max_transfer_amount, r.min_transfer_amount, r.created_at, r.updated_at, r.deleted_at,
+    source.name AS source_country_name,
+    source.currency_symbol AS source_currency_symbol,
+    destination.name AS destination_country_name,
+    destination.currency_symbol AS destination_currency_symbol
 FROM routes r
     JOIN countries source ON source.id = r.source_country_id
     JOIN countries destination ON destination.id = r.destination_country_id
@@ -351,9 +356,29 @@ type GetActiveRouteByCountriesParams struct {
 	DestinationCountryID int64
 }
 
-func (q *Queries) GetActiveRouteByCountries(ctx context.Context, arg GetActiveRouteByCountriesParams) (Route, error) {
+type GetActiveRouteByCountriesRow struct {
+	ID                        uuid.UUID
+	SourceCountryID           int64
+	DestinationCountryID      int64
+	IsActive                  bool
+	DefaultExchangeRate       pgtype.Numeric
+	Fee                       pgtype.Numeric
+	FeeType                   FeeType
+	EstimatedMinutes          *int32
+	MaxTransferAmount         pgtype.Numeric
+	MinTransferAmount         pgtype.Numeric
+	CreatedAt                 time.Time
+	UpdatedAt                 time.Time
+	DeletedAt                 pgtype.Timestamptz
+	SourceCountryName         string
+	SourceCurrencySymbol      string
+	DestinationCountryName    string
+	DestinationCurrencySymbol string
+}
+
+func (q *Queries) GetActiveRouteByCountries(ctx context.Context, arg GetActiveRouteByCountriesParams) (GetActiveRouteByCountriesRow, error) {
 	row := q.db.QueryRow(ctx, getActiveRouteByCountries, arg.SourceCountryID, arg.DestinationCountryID)
-	var i Route
+	var i GetActiveRouteByCountriesRow
 	err := row.Scan(
 		&i.ID,
 		&i.SourceCountryID,
@@ -368,6 +393,10 @@ func (q *Queries) GetActiveRouteByCountries(ctx context.Context, arg GetActiveRo
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.SourceCountryName,
+		&i.SourceCurrencySymbol,
+		&i.DestinationCountryName,
+		&i.DestinationCurrencySymbol,
 	)
 	return i, err
 }

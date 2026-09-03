@@ -36,7 +36,7 @@ type Querier interface {
 	DoesPaymentChannelExist(ctx context.Context, arg DoesPaymentChannelExistParams) (uuid.UUID, error)
 	GetActivePCByCountryTypeAndID(ctx context.Context, arg GetActivePCByCountryTypeAndIDParams) (PaymentChannel, error)
 	GetActivePaymentChannelsByCountryIDs(ctx context.Context, dollar_1 []int64) ([]GetActivePaymentChannelsByCountryIDsRow, error)
-	GetActiveRouteByCountries(ctx context.Context, arg GetActiveRouteByCountriesParams) (Route, error)
+	GetActiveRouteByCountries(ctx context.Context, arg GetActiveRouteByCountriesParams) (GetActiveRouteByCountriesRow, error)
 	GetAdminCountryByID(ctx context.Context, id int64) (Country, error)
 	GetAllActiveRouteDestinations(ctx context.Context) ([]GetAllActiveRouteDestinationsRow, error)
 	GetAllCountries(ctx context.Context) ([]Country, error)

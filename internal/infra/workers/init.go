@@ -17,7 +17,7 @@ func NewWorkers(db *pgxpool.Pool) *workers {
 
 func (w *workers) Init() (*river.Client[pgx.Tx], error) {
 	workers := setupWorkers()
-	client,err := river.NewClient(riverpgxv5.New(w.db),&river.Config{
+	client, err := river.NewClient(riverpgxv5.New(w.db), &river.Config{
 		Queues: map[string]river.QueueConfig{
 			river.QueueDefault: {MaxWorkers: 10},
 		},
@@ -27,9 +27,7 @@ func (w *workers) Init() (*river.Client[pgx.Tx], error) {
 }
 
 func setupWorkers() *river.Workers {
-	// panic if error or invalid config
 	workers := river.NewWorkers()
-
 	river.AddWorker(workers, &NewTransferWorker{})
 
 	return workers

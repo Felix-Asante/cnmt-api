@@ -82,7 +82,11 @@ WHERE id = $1
     AND deleted_at IS NULL
 RETURNING *;
 -- name: GetActiveRouteByCountries :one
-SELECT r.*
+SELECT r.*,
+    source.name AS source_country_name,
+    source.currency_symbol AS source_currency_symbol,
+    destination.name AS destination_country_name,
+    destination.currency_symbol AS destination_currency_symbol
 FROM routes r
     JOIN countries source ON source.id = r.source_country_id
     JOIN countries destination ON destination.id = r.destination_country_id

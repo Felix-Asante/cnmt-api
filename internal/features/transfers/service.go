@@ -17,11 +17,13 @@ import (
 	"cnmt/internal/features/countries"
 	"cnmt/internal/infra/db"
 	"cnmt/internal/infra/storage"
+	"cnmt/internal/infra/workers"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
 	"github.com/shopspring/decimal"
 )
 
@@ -30,11 +32,19 @@ type Service struct {
 	queries *db.Queries
 	objStorage *storage.ObjStorage
 	logger *slog.Logger
+	workerClient *river.Client[pgx.Tx]
 }
 
+type ServiceConfig struct {
+	DB *pgxpool.Pool
+	Queries *db.Queries
+	ObjStorage *storage.ObjStorage
+	Logger *slog.Logger
+	WorkerClient *river.Client[pgx.Tx]
+}
 
-func NewService(db *pgxpool.Pool, queries *db.Queries, objStorage *storage.ObjStorage, logger *slog.Logger) *Service {
-	return &Service{db: db, queries: queries, objStorage: objStorage, logger: logger}
+func NewService(config ServiceConfig) *Service {
+	return &Service{db: config.DB, queries: config.Queries, objStorage: config.ObjStorage, logger: config.Logger, workerClient: config.WorkerClient}
 }
 
 func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest, idemKey string) (createTransferResponse, error) {
@@ -109,6 +119,27 @@ func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest
 		s.logger.Error("failed to complete idempotency key", "error", err)
 		return createTransferResponse{}, common.TranslateDBError(err)
 	}
+
+	if s.workerClient == nil {
+		return createTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
+	}
+
+	res, err := s.workerClient.InsertTx(ctx, tx, workers.NewTransferArgs{
+		Reference:                  resp.Reference,
+		SourceCountryName:          resp.SourceCountryName,
+		DestinationCountryName:     resp.DestinationCountryName,
+		SourceCountryCurrency:      resp.SourceCountryCurrency,
+		DestinationCountryCurrency: resp.DestinationCountryCurrency,
+		AmountPaid:                 resp.AmountPaid,
+		AmountReceived:             resp.AmountReceived,
+		Fee:                        resp.Fee,
+	}, nil)
+	if err != nil {
+		s.logger.Error("failed to enqueue new transfer job", "error", err, "reference", resp.Reference)
+		return createTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
+	}
+
+	s.logger.Info("new transfer job queued", "job_id", res.Job.ID, "reference", resp.Reference)
 
 	if err := tx.Commit(ctx); err != nil {
 		s.logger.Error("failed to commit transaction", "error", err)
@@ -220,9 +251,16 @@ func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body create
 	}
 
 	return createTransferResponse{
-		TransferID: transferID,
-		Reference:  reference,
-		ExpiresIn:  expiresAt.Unix(),
+		TransferID:                  transferID,
+		Reference:                   reference,
+		ExpiresIn:                   expiresAt.Unix(),
+		SourceCountryName:           route.SourceCountryName,
+		DestinationCountryName:      route.DestinationCountryName,
+		SourceCountryCurrency:       route.SourceCurrencySymbol,
+		DestinationCountryCurrency:  route.DestinationCurrencySymbol,
+		Fee:                         calculatedFee.StringFixed(common.MoneyDecimalPlaces),
+		AmountPaid:                  amtPaid.StringFixed(common.MoneyDecimalPlaces),
+		AmountReceived:              amtToReceive.StringFixed(common.MoneyDecimalPlaces),
 	}, nil
 }
 
