@@ -101,7 +101,7 @@ func (q *Queries) CreateTransfer(ctx context.Context, arg CreateTransferParams) 
 }
 
 const getAllTransfers = `-- name: GetAllTransfers :many
-SELECT t.id, t.reference, t.route_id, t.status, t.sender_phone, t.receiving_account_name, t.receiving_mobile_money_number, t.receiving_method, t.receiving_money_network_id, t.receiving_bank_id, t.receiving_bank_account, t.payment_proof_key, t.exchange_rate, t.fee, t.amount_sent, t.amount_received, t.notes, t.expires_at, t.created_at, t.updated_at, t.deleted_at,
+SELECT t.id, t.reference, t.route_id, t.status, t.sender_phone, t.receiving_account_name, t.receiving_mobile_money_number, t.receiving_method, t.receiving_money_network_id, t.receiving_bank_id, t.receiving_bank_account, t.payment_proof_key, t.exchange_rate, t.fee, t.amount_sent, t.amount_received, t.notes, t.expires_at, t.created_at, t.updated_at, t.deleted_at, t.payment_account_id, t.payment_method, t.payment_account_name, t.payment_account_number, t.payment_channel_name, t.payment_currency_code,
     src.id AS source_country_id,
     src.name AS source_country_name,
     src.flag AS source_flag,
@@ -169,6 +169,12 @@ type GetAllTransfersRow struct {
 	CreatedAt                  time.Time
 	UpdatedAt                  time.Time
 	DeletedAt                  pgtype.Timestamptz
+	PaymentAccountID           pgtype.UUID
+	PaymentMethod              *ReceivingMethods
+	PaymentAccountName         *string
+	PaymentAccountNumber       *string
+	PaymentChannelName         *string
+	PaymentCurrencyCode        *string
 	SourceCountryID            int64
 	SourceCountryName          string
 	SourceFlag                 string
@@ -220,6 +226,12 @@ func (q *Queries) GetAllTransfers(ctx context.Context, arg GetAllTransfersParams
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.PaymentAccountID,
+			&i.PaymentMethod,
+			&i.PaymentAccountName,
+			&i.PaymentAccountNumber,
+			&i.PaymentChannelName,
+			&i.PaymentCurrencyCode,
 			&i.SourceCountryID,
 			&i.SourceCountryName,
 			&i.SourceFlag,
@@ -283,7 +295,7 @@ func (q *Queries) GetAllTransfersCount(ctx context.Context, arg GetAllTransfersC
 }
 
 const getTransferByID = `-- name: GetTransferByID :one
-SELECT t.id, t.reference, t.route_id, t.status, t.sender_phone, t.receiving_account_name, t.receiving_mobile_money_number, t.receiving_method, t.receiving_money_network_id, t.receiving_bank_id, t.receiving_bank_account, t.payment_proof_key, t.exchange_rate, t.fee, t.amount_sent, t.amount_received, t.notes, t.expires_at, t.created_at, t.updated_at, t.deleted_at,
+SELECT t.id, t.reference, t.route_id, t.status, t.sender_phone, t.receiving_account_name, t.receiving_mobile_money_number, t.receiving_method, t.receiving_money_network_id, t.receiving_bank_id, t.receiving_bank_account, t.payment_proof_key, t.exchange_rate, t.fee, t.amount_sent, t.amount_received, t.notes, t.expires_at, t.created_at, t.updated_at, t.deleted_at, t.payment_account_id, t.payment_method, t.payment_account_name, t.payment_account_number, t.payment_channel_name, t.payment_currency_code,
     src.id AS source_country_id,
     src.name AS source_country_name,
     src.currency_code AS source_currency_code,
@@ -326,6 +338,12 @@ type GetTransferByIDRow struct {
 	CreatedAt                  time.Time
 	UpdatedAt                  time.Time
 	DeletedAt                  pgtype.Timestamptz
+	PaymentAccountID           pgtype.UUID
+	PaymentMethod              *ReceivingMethods
+	PaymentAccountName         *string
+	PaymentAccountNumber       *string
+	PaymentChannelName         *string
+	PaymentCurrencyCode        *string
 	SourceCountryID            int64
 	SourceCountryName          string
 	SourceCurrencyCode         string
@@ -363,6 +381,12 @@ func (q *Queries) GetTransferByID(ctx context.Context, id uuid.UUID) (GetTransfe
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.PaymentAccountID,
+		&i.PaymentMethod,
+		&i.PaymentAccountName,
+		&i.PaymentAccountNumber,
+		&i.PaymentChannelName,
+		&i.PaymentCurrencyCode,
 		&i.SourceCountryID,
 		&i.SourceCountryName,
 		&i.SourceCurrencyCode,
@@ -378,7 +402,7 @@ func (q *Queries) GetTransferByID(ctx context.Context, id uuid.UUID) (GetTransfe
 }
 
 const getTransferByReference = `-- name: GetTransferByReference :one
-SELECT t.id, t.reference, t.route_id, t.status, t.sender_phone, t.receiving_account_name, t.receiving_mobile_money_number, t.receiving_method, t.receiving_money_network_id, t.receiving_bank_id, t.receiving_bank_account, t.payment_proof_key, t.exchange_rate, t.fee, t.amount_sent, t.amount_received, t.notes, t.expires_at, t.created_at, t.updated_at, t.deleted_at,
+SELECT t.id, t.reference, t.route_id, t.status, t.sender_phone, t.receiving_account_name, t.receiving_mobile_money_number, t.receiving_method, t.receiving_money_network_id, t.receiving_bank_id, t.receiving_bank_account, t.payment_proof_key, t.exchange_rate, t.fee, t.amount_sent, t.amount_received, t.notes, t.expires_at, t.created_at, t.updated_at, t.deleted_at, t.payment_account_id, t.payment_method, t.payment_account_name, t.payment_account_number, t.payment_channel_name, t.payment_currency_code,
     src.id AS source_country_id,
     src.name AS source_country_name,
     src.currency_code AS source_currency_code,
@@ -421,6 +445,12 @@ type GetTransferByReferenceRow struct {
 	CreatedAt                  time.Time
 	UpdatedAt                  time.Time
 	DeletedAt                  pgtype.Timestamptz
+	PaymentAccountID           pgtype.UUID
+	PaymentMethod              *ReceivingMethods
+	PaymentAccountName         *string
+	PaymentAccountNumber       *string
+	PaymentChannelName         *string
+	PaymentCurrencyCode        *string
 	SourceCountryID            int64
 	SourceCountryName          string
 	SourceCurrencyCode         string
@@ -458,6 +488,12 @@ func (q *Queries) GetTransferByReference(ctx context.Context, reference string) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.PaymentAccountID,
+		&i.PaymentMethod,
+		&i.PaymentAccountName,
+		&i.PaymentAccountNumber,
+		&i.PaymentChannelName,
+		&i.PaymentCurrencyCode,
 		&i.SourceCountryID,
 		&i.SourceCountryName,
 		&i.SourceCurrencyCode,

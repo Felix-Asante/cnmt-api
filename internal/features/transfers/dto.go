@@ -66,6 +66,14 @@ type recipientViewDTO struct {
 	AccountNumber   *string             `json:"account_number,omitempty"`
 }
 
+type paymentInstructionsDTO struct {
+	PaymentAccountID *uuid.UUID             `json:"payment_account_id,omitempty"`
+	PaymentMethod    *db.ReceivingMethods   `json:"payment_method,omitempty"`
+	AccountName      *string                `json:"account_name,omitempty"`
+	AccountNumber    *string                `json:"account_number,omitempty"`
+	ChannelName      *string                `json:"channel_name,omitempty"`
+	CurrencyCode     *string                `json:"currency_code,omitempty"`
+}
 
 type getTransferResponse struct {
 	ID                  uuid.UUID               `json:"id"`
@@ -78,6 +86,7 @@ type getTransferResponse struct {
 	Fee                 decimal.Decimal         `json:"fee"`
 	SenderPhone         string                  `json:"sender_phone"`
 	PaymentProofKey     *string                 `json:"payment_proof_key,omitempty"`
+	PaymentInstructions *paymentInstructionsDTO `json:"payment_instructions,omitempty"`
 	Recipient           recipientViewDTO        `json:"recipient"`
 	Notes               *string                 `json:"notes,omitempty"`
 	ExpiresAt           time.Time               `json:"expires_at"`
@@ -173,6 +182,12 @@ type transferRow struct {
 	Fee                        pgtype.Numeric
 	SenderPhone                string
 	PaymentProofKey            *string
+	PaymentAccountID           pgtype.UUID
+	PaymentMethod              *db.ReceivingMethods
+	PaymentAccountName         *string
+	PaymentAccountNumber       *string
+	PaymentChannelName         *string
+	PaymentCurrencyCode        *string
 	ReceivingAccountName       string
 	ReceivingMobileMoneyNumber *string
 	ReceivingMethod            db.ReceivingMethods
@@ -203,6 +218,12 @@ func transferRowFromReference(row db.GetTransferByReferenceRow) transferRow {
 		Fee:                        row.Fee,
 		SenderPhone:                row.SenderPhone,
 		PaymentProofKey:            row.PaymentProofKey,
+		PaymentAccountID:           row.PaymentAccountID,
+		PaymentMethod:              row.PaymentMethod,
+		PaymentAccountName:         row.PaymentAccountName,
+		PaymentAccountNumber:       row.PaymentAccountNumber,
+		PaymentChannelName:         row.PaymentChannelName,
+		PaymentCurrencyCode:        row.PaymentCurrencyCode,
 		ReceivingAccountName:       row.ReceivingAccountName,
 		ReceivingMobileMoneyNumber: row.ReceivingMobileMoneyNumber,
 		ReceivingMethod:            row.ReceivingMethod,
@@ -234,6 +255,12 @@ func transferRowFromList(row db.GetAllTransfersRow) transferRow {
 		Fee:                        row.Fee,
 		SenderPhone:                row.SenderPhone,
 		PaymentProofKey:            row.PaymentProofKey,
+		PaymentAccountID:           row.PaymentAccountID,
+		PaymentMethod:              row.PaymentMethod,
+		PaymentAccountName:         row.PaymentAccountName,
+		PaymentAccountNumber:       row.PaymentAccountNumber,
+		PaymentChannelName:         row.PaymentChannelName,
+		PaymentCurrencyCode:        row.PaymentCurrencyCode,
 		ReceivingAccountName:       row.ReceivingAccountName,
 		ReceivingMobileMoneyNumber: row.ReceivingMobileMoneyNumber,
 		ReceivingMethod:            row.ReceivingMethod,
@@ -288,8 +315,9 @@ func mapTransferRowToDTO(transfer transferRow) (getTransferResponse, error) {
 		AmountReceived: amountReceived,
 		ExchangeRate:   exchangeRate,
 		Fee:            fee,
-		SenderPhone:    transfer.SenderPhone,
-		PaymentProofKey: transfer.PaymentProofKey,
+		SenderPhone:         transfer.SenderPhone,
+		PaymentProofKey:     transfer.PaymentProofKey,
+		PaymentInstructions: mapPaymentInstructions(transfer),
 		Recipient: recipientViewDTO{
 			Name:            transfer.ReceivingAccountName,
 			Phone:           transfer.ReceivingMobileMoneyNumber,
@@ -304,4 +332,30 @@ func mapTransferRowToDTO(transfer transferRow) (getTransferResponse, error) {
 	}
 
 	return resp, nil
+}
+
+func mapPaymentInstructions(transfer transferRow) *paymentInstructionsDTO {
+	if !transfer.PaymentAccountID.Valid &&
+		transfer.PaymentMethod == nil &&
+		transfer.PaymentAccountName == nil &&
+		transfer.PaymentAccountNumber == nil &&
+		transfer.PaymentChannelName == nil &&
+		transfer.PaymentCurrencyCode == nil {
+		return nil
+	}
+
+	var paymentAccountID *uuid.UUID
+	if transfer.PaymentAccountID.Valid {
+		id := common.PgUuidToUuid(transfer.PaymentAccountID)
+		paymentAccountID = &id
+	}
+
+	return &paymentInstructionsDTO{
+		PaymentAccountID: paymentAccountID,
+		PaymentMethod:    transfer.PaymentMethod,
+		AccountName:      transfer.PaymentAccountName,
+		AccountNumber:    transfer.PaymentAccountNumber,
+		ChannelName:      transfer.PaymentChannelName,
+		CurrencyCode:     transfer.PaymentCurrencyCode,
+	}
 }

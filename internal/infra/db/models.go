@@ -212,6 +212,21 @@ type IdempotencyKey struct {
 	ExpiresAt    time.Time
 }
 
+type PaymentAccount struct {
+	ID               uuid.UUID
+	CountryID        int64
+	PaymentMethod    ReceivingMethods
+	Name             string
+	AccountName      string
+	AccountNumber    string
+	PaymentChannelID pgtype.UUID
+	CurrencyCode     string
+	IsActive         bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	DeletedAt        pgtype.Timestamptz
+}
+
 type PaymentChannel struct {
 	ID          uuid.UUID
 	Name        string
@@ -261,6 +276,12 @@ type Transfer struct {
 	CreatedAt                  time.Time
 	UpdatedAt                  time.Time
 	DeletedAt                  pgtype.Timestamptz
+	PaymentAccountID           pgtype.UUID
+	PaymentMethod              *ReceivingMethods
+	PaymentAccountName         *string
+	PaymentAccountNumber       *string
+	PaymentChannelName         *string
+	PaymentCurrencyCode        *string
 }
 
 type TransferEvent struct {
