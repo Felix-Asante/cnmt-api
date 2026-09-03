@@ -33,6 +33,7 @@ type AppConfig struct {
 type App struct {
 	Router *chi.Mux
 	WorkerClient *river.Client[pgx.Tx]
+	Logger *slog.Logger
 }
 
 func NewApp(dbConn *pgxpool.Pool) *AppConfig {
@@ -98,7 +99,7 @@ func (app *AppConfig) Run() (*App, error) {
 
 	initRoutes(r, config)
 
-	return &App{Router: r, WorkerClient: workerClient}, nil
+	return &App{Router: r, WorkerClient: workerClient, Logger: logger}, nil
 }
 
 type RoutesConfig struct {
