@@ -19,6 +19,44 @@ WHERE pa.country_id = $1
 ORDER BY pa.payment_method,
     pa.name;
 
+-- name: ListPaymentAccounts :many
+SELECT pa.id,
+    pa.country_id,
+    pa.payment_method,
+    pa.name,
+    pa.account_name,
+    pa.account_number,
+    pa.phone_number,
+    pa.sort_code,
+    pa.iban,
+    pa.payment_channel_id,
+    pa.currency_code,
+    pa.is_active,
+    pa.created_at,
+    pa.updated_at,
+    pc.name AS channel_name
+FROM payment_accounts pa
+    LEFT JOIN payment_channels pc ON pc.id = pa.payment_channel_id
+    AND pc.deleted_at IS NULL
+WHERE pa.deleted_at IS NULL
+    AND pa.country_id = COALESCE(
+        NULLIF(sqlc.arg(country_id)::bigint, 0),
+        pa.country_id
+    )
+    AND pa.payment_method = COALESCE(
+        NULLIF(sqlc.arg(payment_method)::text, '')::receiving_methods,
+        pa.payment_method
+    )
+    AND pa.is_active = COALESCE(
+        NULLIF(sqlc.arg(is_active)::text, '')::boolean,
+        pa.is_active
+    )
+    AND pa.currency_code = COALESCE(
+        NULLIF(sqlc.arg(currency_code)::text, ''),
+        pa.currency_code
+    )
+ORDER BY pa.created_at DESC;
+
 -- name: GetPaymentAccountByID :one
 SELECT pa.id,
     pa.country_id,

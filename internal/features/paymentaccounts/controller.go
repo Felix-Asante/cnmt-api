@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"cnmt/internal/common/httpx"
 
@@ -27,6 +28,41 @@ func (c *Controller) listByCountry(w http.ResponseWriter, r *http.Request) {
 	}
 
 	accounts, err := c.svc.ListByCountryID(r.Context(), countryID)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, accounts)
+}
+
+func (c *Controller) list(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+
+	countryID, err := parseOptionalInt64(q.Get("country_id"))
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: invalid country_id", httpx.BadRequestError))
+		return
+	}
+
+	paymentMethod := q.Get("payment_method")
+	if paymentMethod != "" && paymentMethod != "BANK" && paymentMethod != "MOBILE_MONEY" {
+		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: payment_method must be BANK or MOBILE_MONEY", httpx.BadRequestError))
+		return
+	}
+
+	isActive := q.Get("is_active")
+	if isActive != "" && isActive != "true" && isActive != "false" {
+		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: is_active must be true or false", httpx.BadRequestError))
+		return
+	}
+
+	currencyCode := strings.ToUpper(strings.TrimSpace(q.Get("currency_code")))
+	if currencyCode != "" && len(currencyCode) != 3 {
+		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: currency_code must be 3 characters", httpx.BadRequestError))
+		return
+	}
+
+	accounts, err := c.svc.List(r.Context(), countryID, paymentMethod, isActive, currencyCode)
 	if err != nil {
 		httpx.WriteError(w, httpx.StatusFromError(err), err)
 		return
@@ -117,4 +153,11 @@ func (c *Controller) parseID(w http.ResponseWriter, r *http.Request) (uuid.UUID,
 		return uuid.Nil, false
 	}
 	return id, true
+}
+
+func parseOptionalInt64(raw string) (int64, error) {
+	if raw == "" {
+		return 0, nil
+	}
+	return strconv.ParseInt(raw, 10, 64)
 }

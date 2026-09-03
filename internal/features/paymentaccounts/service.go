@@ -34,6 +34,24 @@ func (s *Service) ListByCountryID(ctx context.Context, countryID int64) ([]Payme
 	return responses, nil
 }
 
+func (s *Service) List(ctx context.Context, countryID int64, paymentMethod, isActive, currencyCode string) ([]PaymentAccountResponse, error) {
+	accounts, err := s.queries.ListPaymentAccounts(ctx, db.ListPaymentAccountsParams{
+		CountryID:     countryID,
+		PaymentMethod: paymentMethod,
+		IsActive:      isActive,
+		CurrencyCode:  currencyCode,
+	})
+	if err != nil {
+		return nil, common.TranslateDBError(err)
+	}
+
+	responses := make([]PaymentAccountResponse, 0, len(accounts))
+	for _, account := range accounts {
+		responses = append(responses, mapAdminListRow(account))
+	}
+	return responses, nil
+}
+
 func (s *Service) Create(ctx context.Context, req CreatePaymentAccountRequest) (PaymentAccountResponse, error) {
 	attrs := req.paymentAccountAttrs.normalized()
 	if err := attrs.validateMethodFields(req.PaymentMethod); err != nil {

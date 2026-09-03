@@ -242,6 +242,111 @@ func (q *Queries) ListActivePaymentAccountsByCountryID(ctx context.Context, coun
 	return items, nil
 }
 
+const listPaymentAccounts = `-- name: ListPaymentAccounts :many
+SELECT pa.id,
+    pa.country_id,
+    pa.payment_method,
+    pa.name,
+    pa.account_name,
+    pa.account_number,
+    pa.phone_number,
+    pa.sort_code,
+    pa.iban,
+    pa.payment_channel_id,
+    pa.currency_code,
+    pa.is_active,
+    pa.created_at,
+    pa.updated_at,
+    pc.name AS channel_name
+FROM payment_accounts pa
+    LEFT JOIN payment_channels pc ON pc.id = pa.payment_channel_id
+    AND pc.deleted_at IS NULL
+WHERE pa.deleted_at IS NULL
+    AND pa.country_id = COALESCE(
+        NULLIF($1::bigint, 0),
+        pa.country_id
+    )
+    AND pa.payment_method = COALESCE(
+        NULLIF($2::text, '')::receiving_methods,
+        pa.payment_method
+    )
+    AND pa.is_active = COALESCE(
+        NULLIF($3::text, '')::boolean,
+        pa.is_active
+    )
+    AND pa.currency_code = COALESCE(
+        NULLIF($4::text, ''),
+        pa.currency_code
+    )
+ORDER BY pa.created_at DESC
+`
+
+type ListPaymentAccountsParams struct {
+	CountryID     int64
+	PaymentMethod string
+	IsActive      string
+	CurrencyCode  string
+}
+
+type ListPaymentAccountsRow struct {
+	ID               uuid.UUID
+	CountryID        int64
+	PaymentMethod    ReceivingMethods
+	Name             string
+	AccountName      string
+	AccountNumber    *string
+	PhoneNumber      *string
+	SortCode         *string
+	Iban             *string
+	PaymentChannelID pgtype.UUID
+	CurrencyCode     string
+	IsActive         bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	ChannelName      *string
+}
+
+func (q *Queries) ListPaymentAccounts(ctx context.Context, arg ListPaymentAccountsParams) ([]ListPaymentAccountsRow, error) {
+	rows, err := q.db.Query(ctx, listPaymentAccounts,
+		arg.CountryID,
+		arg.PaymentMethod,
+		arg.IsActive,
+		arg.CurrencyCode,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPaymentAccountsRow{}
+	for rows.Next() {
+		var i ListPaymentAccountsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CountryID,
+			&i.PaymentMethod,
+			&i.Name,
+			&i.AccountName,
+			&i.AccountNumber,
+			&i.PhoneNumber,
+			&i.SortCode,
+			&i.Iban,
+			&i.PaymentChannelID,
+			&i.CurrencyCode,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ChannelName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setPaymentAccountActive = `-- name: SetPaymentAccountActive :one
 UPDATE payment_accounts
 SET is_active = $2,

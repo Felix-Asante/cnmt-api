@@ -58,6 +58,7 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) (IdempotencyKey, error)
 	ListActivePaymentAccountsByCountryID(ctx context.Context, countryID int64) ([]ListActivePaymentAccountsByCountryIDRow, error)
+	ListPaymentAccounts(ctx context.Context, arg ListPaymentAccountsParams) ([]ListPaymentAccountsRow, error)
 	ListRoutes(ctx context.Context, arg ListRoutesParams) ([]Route, error)
 	SetPaymentAccountActive(ctx context.Context, arg SetPaymentAccountActiveParams) (PaymentAccount, error)
 	SetPaymentProofKey(ctx context.Context, arg SetPaymentProofKeyParams) error

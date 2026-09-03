@@ -108,6 +108,26 @@ func mapListRow(row db.ListActivePaymentAccountsByCountryIDRow) PaymentAccountRe
 	}
 }
 
+func mapAdminListRow(row db.ListPaymentAccountsRow) PaymentAccountResponse {
+	return PaymentAccountResponse{
+		ID:               row.ID,
+		CountryID:        row.CountryID,
+		PaymentMethod:    row.PaymentMethod,
+		Name:             row.Name,
+		AccountName:      row.AccountName,
+		AccountNumber:    row.AccountNumber,
+		PhoneNumber:      row.PhoneNumber,
+		SortCode:         row.SortCode,
+		IBAN:             row.Iban,
+		PaymentChannelID: pgUuidPtr(row.PaymentChannelID),
+		ChannelName:      row.ChannelName,
+		CurrencyCode:     row.CurrencyCode,
+		IsActive:         row.IsActive,
+		CreatedAt:        row.CreatedAt,
+		UpdatedAt:        row.UpdatedAt,
+	}
+}
+
 func mapDetailRow(row db.GetPaymentAccountByIDRow) PaymentAccountResponse {
 	return PaymentAccountResponse{
 		ID:               row.ID,
