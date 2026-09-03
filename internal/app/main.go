@@ -10,6 +10,7 @@ import (
 	"cnmt/internal/features/auth"
 	"cnmt/internal/features/countries"
 	"cnmt/internal/features/dashboard"
+	"cnmt/internal/features/paymentaccounts"
 	"cnmt/internal/features/transfers"
 	"cnmt/internal/infra/db"
 	"cnmt/internal/infra/storage"
@@ -102,11 +103,13 @@ func initRoutes(r *chi.Mux, config RoutesConfig) {
 
 	transferCtrl := transfers.NewController(transfers.NewService(config.dbConn, dbQueries, config.objStorage, config.logger))
 	countryCtrl := countries.NewController(countries.NewService(dbQueries, config.logger, config.dbConn))
+	paymentAccountCtrl := paymentaccounts.NewController(paymentaccounts.NewService(dbQueries, config.logger))
 	dashboardCtrl := dashboard.NewController(dashboard.NewService(dbQueries, config.logger))
 
 	r.Route("/api/v1", func(r chi.Router) {
 		transferCtrl.Routes(r)
 		countryCtrl.Routes(r)
+		paymentAccountCtrl.Routes(r)
 		authCtrl.Routes(r)
 
 		r.Group(func(r chi.Router) {
@@ -116,6 +119,7 @@ func initRoutes(r *chi.Mux, config RoutesConfig) {
 				r.Use(authMiddleware.RequireRole(auth.RoleAdmin))
 				transferCtrl.AdminRoutes(r)
 				countryCtrl.AdminRoutes(r)
+				paymentAccountCtrl.AdminRoutes(r)
 				dashboardCtrl.AdminRoutes(r)
 				authCtrl.AuthenticatedRoutes(r)
 			})

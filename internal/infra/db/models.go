@@ -218,13 +218,16 @@ type PaymentAccount struct {
 	PaymentMethod    ReceivingMethods
 	Name             string
 	AccountName      string
-	AccountNumber    string
+	AccountNumber    *string
 	PaymentChannelID pgtype.UUID
 	CurrencyCode     string
 	IsActive         bool
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 	DeletedAt        pgtype.Timestamptz
+	PhoneNumber      *string
+	SortCode         *string
+	Iban             *string
 }
 
 type PaymentChannel struct {
