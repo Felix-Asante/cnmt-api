@@ -422,6 +422,7 @@ func (s *Service) CreatePaymentProofSignedUrl(ctx context.Context, reference, co
 }
 
 func (s *Service) ConfirmPaymentProof(ctx context.Context, body confirmPaymentProofRequest) error {
+	s.logger.Info("confirming payment proof", "payload", body)
 	transfer, err := s.queries.GetTransferByReference(ctx, body.Reference)
 	if err != nil {
 		return common.TranslateDBError(err)
