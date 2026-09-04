@@ -3,6 +3,7 @@ package httpx
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 )
@@ -23,7 +24,9 @@ func WriteError(w http.ResponseWriter, status int, err error) {
 
 	var ve *ValidationError
 	if errors.As(err, &ve) {
-		w.WriteHeader(http.StatusUnprocessableEntity)
+		status = http.StatusUnprocessableEntity
+		slog.Warn("request validation failed", "status", status, "err", err, "fields", ve.Fields)
+		w.WriteHeader(status)
 		_ = json.NewEncoder(w).Encode(errorBody{
 			Error:  "validation_failed",
 			Fields: ve.Fields,
@@ -35,8 +38,15 @@ func WriteError(w http.ResponseWriter, status int, err error) {
 		status = StatusFromError(err)
 	}
 
+	publicMsg := PublicMessage(err)
+	if status >= http.StatusInternalServerError {
+		slog.Error("request failed", "status", status, "err", err, "public", publicMsg)
+	} else {
+		slog.Warn("request failed", "status", status, "err", err, "public", publicMsg)
+	}
+
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(errorBody{Error: PublicMessage(err)})
+	_ = json.NewEncoder(w).Encode(errorBody{Error: publicMsg})
 }
 
 func StatusFromError(err error) int {
