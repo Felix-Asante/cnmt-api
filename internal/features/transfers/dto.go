@@ -113,8 +113,9 @@ type createPaymentProofSignedUrlResponse struct {
 }
 
 type confirmPaymentProofRequest struct {
-	Reference string `json:"reference" validate:"required,min=1,max=100"`
-	Key       string `json:"key" validate:"required,min=1"`
+	Reference        string    `json:"reference" validate:"required,min=1,max=100"`
+	Key              string    `json:"key" validate:"required,min=1"`
+	PaymentAccountID uuid.UUID `json:"payment_account_id" validate:"required"`
 }
 
 type adminActionRequest struct {

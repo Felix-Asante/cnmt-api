@@ -511,18 +511,40 @@ func (q *Queries) GetTransferByReference(ctx context.Context, reference string) 
 const setPaymentProofKey = `-- name: SetPaymentProofKey :exec
 UPDATE transfers
 SET payment_proof_key = $1,
-    status = 'PAYMENT_RECEIVED'
-WHERE reference = $2
+    payment_account_id = $2,
+    payment_method = $3,
+    payment_account_name = $4,
+    payment_account_number = $5,
+    payment_channel_name = $6,
+    payment_currency_code = $7,
+    status = 'PAYMENT_RECEIVED',
+    updated_at = now()
+WHERE reference = $8
     AND status = 'PENDING_PAYMENT'
     AND deleted_at IS NULL
 `
 
 type SetPaymentProofKeyParams struct {
-	PaymentProofKey *string
-	Reference       string
+	PaymentProofKey      *string
+	PaymentAccountID     pgtype.UUID
+	PaymentMethod        *ReceivingMethods
+	PaymentAccountName   *string
+	PaymentAccountNumber *string
+	PaymentChannelName   *string
+	PaymentCurrencyCode  *string
+	Reference            string
 }
 
 func (q *Queries) SetPaymentProofKey(ctx context.Context, arg SetPaymentProofKeyParams) error {
-	_, err := q.db.Exec(ctx, setPaymentProofKey, arg.PaymentProofKey, arg.Reference)
+	_, err := q.db.Exec(ctx, setPaymentProofKey,
+		arg.PaymentProofKey,
+		arg.PaymentAccountID,
+		arg.PaymentMethod,
+		arg.PaymentAccountName,
+		arg.PaymentAccountNumber,
+		arg.PaymentChannelName,
+		arg.PaymentCurrencyCode,
+		arg.Reference,
+	)
 	return err
 }

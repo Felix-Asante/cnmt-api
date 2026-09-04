@@ -445,13 +445,52 @@ func (s *Service) ConfirmPaymentProof(ctx context.Context, body confirmPaymentPr
 		return fmt.Errorf("%w", httpx.InternalServerError)
 	}
 
+	account, err := s.queries.GetPaymentAccountByID(ctx, body.PaymentAccountID)
+	if err != nil {
+		return common.TranslateDBError(err)
+	}
+	if !account.IsActive {
+		return fmt.Errorf("%w: payment account is not active", httpx.BadRequestError)
+	}
+	if account.CountryID != transfer.SourceCountryID {
+		return fmt.Errorf("%w: payment account does not belong to the source country", httpx.BadRequestError)
+	}
+
+	accountNumber, err := paymentAccountSnapshotNumber(account)
+	if err != nil {
+		return err
+	}
+
 	if err := s.queries.SetPaymentProofKey(ctx, db.SetPaymentProofKeyParams{
-		Reference:       body.Reference,
-		PaymentProofKey: &body.Key,
+		PaymentProofKey:      &body.Key,
+		PaymentAccountID:     common.UuidToPgtype(account.ID),
+		PaymentMethod:        &account.PaymentMethod,
+		PaymentAccountName:   &account.AccountName,
+		PaymentAccountNumber: accountNumber,
+		PaymentChannelName:   account.ChannelName,
+		PaymentCurrencyCode:  &account.CurrencyCode,
+		Reference:            body.Reference,
 	}); err != nil {
 		return common.TranslateDBError(err)
 	}
 	return nil
+}
+
+func paymentAccountSnapshotNumber(account db.GetPaymentAccountByIDRow) (*string, error) {
+	switch account.PaymentMethod {
+	case db.ReceivingMethodsBANK:
+		if account.AccountNumber == nil || *account.AccountNumber == "" {
+			return nil, fmt.Errorf("%w: payment account is missing account number", httpx.BadRequestError)
+		}
+		return account.AccountNumber, nil
+	case db.ReceivingMethodsMOBILEMONEY:
+		if account.PhoneNumber == nil || *account.PhoneNumber == "" {
+			return nil, fmt.Errorf("%w: payment account is missing phone number", httpx.BadRequestError)
+		}
+		return account.PhoneNumber, nil
+	default:
+		return nil, fmt.Errorf("%w: unsupported payment method", httpx.BadRequestError)
+	}
 }
 
 func (s *Service) GetAllTransfers(ctx context.Context, body getAllTransfersRequest) (getAllTransfersResponse, error) {
