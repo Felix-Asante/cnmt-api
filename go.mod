@@ -52,6 +52,7 @@ require (
 	github.com/lestrrat-go/option v1.0.1 // indirect
 	github.com/lib/pq v1.12.3 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
+	github.com/resend/resend-go/v3 v3.17.0 // indirect
 	github.com/riverqueue/apiframe v0.0.0-20260901060805-2030400e7b64 // indirect
 	github.com/riverqueue/river v0.47.0 // indirect
 	github.com/riverqueue/river/riverdriver v0.47.0 // indirect

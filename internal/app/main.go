@@ -14,6 +14,7 @@ import (
 	"cnmt/internal/features/paymentaccounts"
 	"cnmt/internal/features/transfers"
 	"cnmt/internal/infra/db"
+	"cnmt/internal/infra/notifications"
 	"cnmt/internal/infra/storage"
 	"cnmt/internal/infra/workers"
 
@@ -64,7 +65,12 @@ func (app *AppConfig) Run() (*App, error) {
 
 	dbQueries := db.New(app.dbConn)
 
-	workerFct := workers.NewWorkers(app.dbConn)
+	notifier, err := notifications.NewFromEnv(logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize notifications: %w", err)
+	}
+
+	workerFct := workers.NewWorkers(app.dbConn, notifier)
 	workerClient, workerErr := workerFct.Init()
 
 	if workerErr != nil {

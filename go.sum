@@ -106,6 +106,8 @@ github.com/pressly/goose/v3 v3.27.3 h1:pIglVHjw99r4e/hDHHwbl9vfOsDMqUokfkXo6+n/R
 github.com/pressly/goose/v3 v3.27.3/go.mod h1:Dag+xpV6o20HR2LFY1j0q6MDwc3f7vPUFDA77R+0yGY=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
+github.com/resend/resend-go/v3 v3.17.0 h1:Q/kP5jaTD/2X/qO+apSSVNWAgsBCI7Itds+KMjjosTk=
+github.com/resend/resend-go/v3 v3.17.0/go.mod h1:iI7VA0NoGjWvsNii5iNC5Dy0llsI3HncXPejhniYzwE=
 github.com/riverqueue/apiframe v0.0.0-20260901060805-2030400e7b64 h1:nXZR75+wZMlV/mg86fHA1THZK4FLEbmWufys5okhSlQ=
 github.com/riverqueue/apiframe v0.0.0-20260901060805-2030400e7b64/go.mod h1:Zo/F0Tm42GFXsqX67tGByrYKEcMZQOTB0EX3Chg9/as=
 github.com/riverqueue/river v0.47.0 h1:j8HOEyiOE8gRRhVS2wllKams372TH1WWiH6xCakXHqc=
