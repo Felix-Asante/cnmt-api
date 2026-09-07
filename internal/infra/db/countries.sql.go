@@ -335,8 +335,10 @@ func (q *Queries) GetActivePaymentChannelsByCountryIDs(ctx context.Context, doll
 const getActiveRouteByCountries = `-- name: GetActiveRouteByCountries :one
 SELECT r.id, r.source_country_id, r.destination_country_id, r.is_active, r.default_exchange_rate, r.fee, r.fee_type, r.estimated_minutes, r.max_transfer_amount, r.min_transfer_amount, r.created_at, r.updated_at, r.deleted_at,
     source.name AS source_country_name,
+    source.iso_code AS source_country_iso,
     source.currency_symbol AS source_currency_symbol,
     destination.name AS destination_country_name,
+    destination.iso_code AS destination_country_iso,
     destination.currency_symbol AS destination_currency_symbol
 FROM routes r
     JOIN countries source ON source.id = r.source_country_id
@@ -371,8 +373,10 @@ type GetActiveRouteByCountriesRow struct {
 	UpdatedAt                 time.Time
 	DeletedAt                 pgtype.Timestamptz
 	SourceCountryName         string
+	SourceCountryIso          string
 	SourceCurrencySymbol      string
 	DestinationCountryName    string
+	DestinationCountryIso     string
 	DestinationCurrencySymbol string
 }
 
@@ -394,8 +398,10 @@ func (q *Queries) GetActiveRouteByCountries(ctx context.Context, arg GetActiveRo
 		&i.UpdatedAt,
 		&i.DeletedAt,
 		&i.SourceCountryName,
+		&i.SourceCountryIso,
 		&i.SourceCurrencySymbol,
 		&i.DestinationCountryName,
+		&i.DestinationCountryIso,
 		&i.DestinationCurrencySymbol,
 	)
 	return i, err

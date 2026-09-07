@@ -1,15 +1,29 @@
 package common
 
 import (
-	"fmt"
-	"time"
-
 	"crypto/rand"
+	"fmt"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/oklog/ulid/v2"
 )
+
+
+func GenerateTransferReference(sourceCountry, destinationCountry string) string {
+	src := strings.ToUpper(strings.TrimSpace(sourceCountry))
+	dst := strings.ToUpper(strings.TrimSpace(destinationCountry))
+
+	now := time.Now().UTC()
+	entropy := ulid.Monotonic(rand.Reader, 0)
+	id, err := ulid.New(ulid.Timestamp(now), entropy)
+	if err != nil {
+		return fmt.Sprintf("TRANS-%s-%s-%s", src, dst, uuid.New().String())
+	}
+	return fmt.Sprintf("TRANS-%s-%s-%s", src, dst, id.String())
+}
 
 
 func GenerateReference() string {
@@ -40,7 +54,7 @@ func PgUuidToUuid(id pgtype.UUID) uuid.UUID {
 	return uuid.UUID(id.Bytes)
 }
 
-func GenerateAssetKey(folder,key,dst,contentType string) string {
+func GenerateAssetKey(folder, key, dst, contentType string) string {
 	ext := "jpg"
 	switch contentType {
 	case "image/png":

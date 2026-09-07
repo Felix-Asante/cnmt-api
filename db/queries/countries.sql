@@ -84,8 +84,10 @@ RETURNING *;
 -- name: GetActiveRouteByCountries :one
 SELECT r.*,
     source.name AS source_country_name,
+    source.iso_code AS source_country_iso,
     source.currency_symbol AS source_currency_symbol,
     destination.name AS destination_country_name,
+    destination.iso_code AS destination_country_iso,
     destination.currency_symbol AS destination_currency_symbol
 FROM routes r
     JOIN countries source ON source.id = r.source_country_id

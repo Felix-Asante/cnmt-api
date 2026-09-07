@@ -219,12 +219,8 @@ func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body create
 		return createTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
 	}
 
-	reference := common.GenerateReference()
-	if reference == "" {
-		return createTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
-	}
-
 	expiresAt := time.Now().UTC().Add(24 * time.Hour)
+	reference := common.GenerateTransferReference(route.SourceCountryIso, route.DestinationCountryIso)
 
 	transferID, err := q.CreateTransfer(ctx, db.CreateTransferParams{
 		Reference:                  reference,
