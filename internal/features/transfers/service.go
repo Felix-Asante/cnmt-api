@@ -385,7 +385,20 @@ func (s *Service) GetByReference(ctx context.Context, reference string) (getTran
 		s.logger.Error("failed to map transfer to dto", "error", err)
 		return getTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
 	}
+	transferDTO.PaymentProofURL = s.paymentProofURL(ctx, transferDTO.PaymentProofKey)
 	return transferDTO, nil
+}
+
+func (s *Service) paymentProofURL(ctx context.Context, key *string) *string {
+	if key == nil || *key == "" || s.objStorage == nil {
+		return nil
+	}
+	url, err := s.objStorage.GetDownloadUrl(ctx, *key)
+	if err != nil {
+		s.logger.Warn("failed to generate payment proof download url", "error", err, "key", *key)
+		return nil
+	}
+	return &url
 }
 
 func (s *Service) CreatePaymentProofSignedUrl(ctx context.Context, reference, contentType string) (createPaymentProofSignedUrlResponse, error) {
@@ -541,6 +554,7 @@ func (s *Service) GetAllTransfers(ctx context.Context, body getAllTransfersReque
 		if err != nil {
 			return getAllTransfersResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
 		}
+		mappedTransfers[i].PaymentProofURL = s.paymentProofURL(ctx, mappedTransfers[i].PaymentProofKey)
 	}
 
 	return getAllTransfersResponse{

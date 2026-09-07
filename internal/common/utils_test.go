@@ -8,13 +8,13 @@ import (
 func TestGenerateTransferReference(t *testing.T) {
 	ref := GenerateTransferReference("GH", "LR")
 
-	if !strings.HasPrefix(ref, "TRANSFER-GH-LR-") {
-		t.Errorf("expected reference to start with TRANSFER-GH-LR-, got %s", ref)
+	if !strings.HasPrefix(ref, "TRANS-GH-LR-") {
+		t.Errorf("expected reference to start with TRANS-GH-LR-, got %s", ref)
 	}
 
 	// Should be uppercase and trim spaces
 	refLower := GenerateTransferReference(" gh ", "lr ")
-	if !strings.HasPrefix(refLower, "TRANSFER-GH-LR-") {
+	if !strings.HasPrefix(refLower, "TRANS-GH-LR-") {
 		t.Errorf("expected trimmed uppercase reference, got %s", refLower)
 	}
 }

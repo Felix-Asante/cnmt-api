@@ -93,6 +93,7 @@ type getTransferResponse struct {
 	Fee                 decimal.Decimal         `json:"fee"`
 	SenderPhone         string                  `json:"sender_phone"`
 	PaymentProofKey     *string                 `json:"payment_proof_key,omitempty"`
+	PaymentProofURL     *string                 `json:"payment_proof_url,omitempty"`
 	PaymentInstructions *paymentInstructionsDTO `json:"payment_instructions,omitempty"`
 	Recipient           recipientViewDTO        `json:"recipient"`
 	Notes               *string                 `json:"notes,omitempty"`

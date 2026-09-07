@@ -37,9 +37,10 @@ var (
 )
 
 type ObjStorage struct {
-	client *s3.Client
-	bucket string
-	urlTTL time.Duration
+	client        *s3.Client
+	presignClient *s3.PresignClient
+	bucket        string
+	urlTTL        time.Duration
 }
 
 func NewObjStorage(urlTTL time.Duration) (*ObjStorage, error) {
@@ -61,15 +62,33 @@ func NewObjStorage(urlTTL time.Duration) (*ObjStorage, error) {
 		o.UsePathStyle = true
 	})
 
-	return &ObjStorage{client: client, bucket: bucket, urlTTL: urlTTL}, nil
+	return &ObjStorage{
+		client:        client,
+		presignClient: s3.NewPresignClient(client),
+		bucket:        bucket,
+		urlTTL:        urlTTL,
+	}, nil
 }
 
 func (o *ObjStorage) GetPresignedUrl(ctx context.Context, key, contentType string) (string, error) {
-	presignClient := s3.NewPresignClient(o.client)
-	returnValue, err := presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
+	returnValue, err := o.presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(o.bucket),
 		Key:         aws.String(key),
 		ContentType: aws.String(contentType),
+	}, s3.WithPresignExpires(o.urlTTL))
+	if err != nil {
+		return "", err
+	}
+	return returnValue.URL, nil
+}
+
+func (o *ObjStorage) GetDownloadUrl(ctx context.Context, key string) (string, error) {
+	if key == "" {
+		return "", nil
+	}
+	returnValue, err := o.presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(o.bucket),
+		Key:    aws.String(key),
 	}, s3.WithPresignExpires(o.urlTTL))
 	if err != nil {
 		return "", err
