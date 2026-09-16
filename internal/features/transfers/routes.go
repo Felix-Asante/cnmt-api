@@ -5,7 +5,6 @@ import "github.com/go-chi/chi/v5"
 func (c *Controller) Routes(r chi.Router) {
 	r.Route("/transfers", func(r chi.Router) {
 		r.Post("/", c.createTransfer)
-		r.Get("/", c.getAllTransfers)
 		r.Get("/options", c.getTransferOptions)
 		r.Get("/{reference}", c.getTransferByReference)
 		r.Post("/payment-proof/upload-url", c.createPaymentProofSignedUrl)
@@ -15,6 +14,7 @@ func (c *Controller) Routes(r chi.Router) {
 
 func (c *Controller) AdminRoutes(r chi.Router) {
 	r.Route("/admin/transfers", func(r chi.Router) {
+		r.Get("/", c.getAllTransfers)
 		r.Route("/{id}", func(r chi.Router) {
 			r.Post("/verify-payment", c.verifyPayment)
 			r.Post("/reject-payment", c.rejectPayment)
