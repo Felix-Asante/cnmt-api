@@ -523,21 +523,21 @@ func (s *Service) GetAllTransfers(ctx context.Context, body getAllTransfersReque
 	offset := (page - 1) * limit
 
 	filters := db.GetAllTransfersCountParams{
-		Column1: strOrEmpty(body.SenderPhone),
-		Column2: strOrEmpty(body.RecipientPhone),
-		Column3: statusOrEmpty(body.Status),
-		Column4: strOrEmpty(body.Reference),
-		Column5: uuidOrNil(body.RouteID),
+		SenderPhone:    strOrEmpty(body.SenderPhone),
+		RecipientPhone: strOrEmpty(body.RecipientPhone),
+		Status:         statusOrEmpty(body.Status),
+		Reference:      strOrEmpty(body.Reference),
+		RouteID:        uuidOrNil(body.RouteID),
 	}
 
 	transfers, err := s.queries.GetAllTransfers(ctx, db.GetAllTransfersParams{
-		Column1: filters.Column1,
-		Column2: filters.Column2,
-		Column3: filters.Column3,
-		Column4: filters.Column4,
-		Column5: filters.Column5,
-		Limit:   int32(limit),
-		Offset:  int32(offset),
+		SenderPhone:    filters.SenderPhone,
+		RecipientPhone: filters.RecipientPhone,
+		Status:         filters.Status,
+		Reference:      filters.Reference,
+		RouteID:        filters.RouteID,
+		RowLimit:       int32(limit),
+		RowOffset:      int32(offset),
 	})
 	if err != nil {
 		return getAllTransfersResponse{}, common.TranslateDBError(err)
@@ -554,7 +554,6 @@ func (s *Service) GetAllTransfers(ctx context.Context, body getAllTransfersReque
 		if err != nil {
 			return getAllTransfersResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
 		}
-		mappedTransfers[i].PaymentProofURL = s.paymentProofURL(ctx, mappedTransfers[i].PaymentProofKey)
 	}
 
 	return getAllTransfersResponse{

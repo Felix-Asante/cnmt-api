@@ -134,17 +134,17 @@ WHERE t.deleted_at IS NULL
         t.route_id
     )
 ORDER BY t.created_at DESC
-LIMIT $6 OFFSET $7
+LIMIT $7 OFFSET $6
 `
 
 type GetAllTransfersParams struct {
-	Column1 string
-	Column2 string
-	Column3 string
-	Column4 string
-	Column5 uuid.UUID
-	Limit   int32
-	Offset  int32
+	SenderPhone    string
+	RecipientPhone string
+	Status         string
+	Reference      string
+	RouteID        uuid.UUID
+	RowOffset      int32
+	RowLimit       int32
 }
 
 type GetAllTransfersRow struct {
@@ -189,13 +189,13 @@ type GetAllTransfersRow struct {
 
 func (q *Queries) GetAllTransfers(ctx context.Context, arg GetAllTransfersParams) ([]GetAllTransfersRow, error) {
 	rows, err := q.db.Query(ctx, getAllTransfers,
-		arg.Column1,
-		arg.Column2,
-		arg.Column3,
-		arg.Column4,
-		arg.Column5,
-		arg.Limit,
-		arg.Offset,
+		arg.SenderPhone,
+		arg.RecipientPhone,
+		arg.Status,
+		arg.Reference,
+		arg.RouteID,
+		arg.RowOffset,
+		arg.RowLimit,
 	)
 	if err != nil {
 		return nil, err
@@ -274,20 +274,20 @@ WHERE t.deleted_at IS NULL
 `
 
 type GetAllTransfersCountParams struct {
-	Column1 string
-	Column2 string
-	Column3 string
-	Column4 string
-	Column5 uuid.UUID
+	SenderPhone    string
+	RecipientPhone string
+	Status         string
+	Reference      string
+	RouteID        uuid.UUID
 }
 
 func (q *Queries) GetAllTransfersCount(ctx context.Context, arg GetAllTransfersCountParams) (int64, error) {
 	row := q.db.QueryRow(ctx, getAllTransfersCount,
-		arg.Column1,
-		arg.Column2,
-		arg.Column3,
-		arg.Column4,
-		arg.Column5,
+		arg.SenderPhone,
+		arg.RecipientPhone,
+		arg.Status,
+		arg.Reference,
+		arg.RouteID,
 	)
 	var count int64
 	err := row.Scan(&count)

@@ -111,36 +111,36 @@ FROM transfers t
     LEFT JOIN payment_channels network ON network.id = t.receiving_money_network_id
     LEFT JOIN payment_channels bank ON bank.id = t.receiving_bank_id
 WHERE t.deleted_at IS NULL
-    AND t.sender_phone = COALESCE(NULLIF($1::text, ''), t.sender_phone)
+    AND t.sender_phone = COALESCE(NULLIF(sqlc.arg(sender_phone)::text, ''), t.sender_phone)
     AND COALESCE(t.receiving_mobile_money_number, '') = COALESCE(
-        NULLIF($2::text, ''),
+        NULLIF(sqlc.arg(recipient_phone)::text, ''),
         COALESCE(t.receiving_mobile_money_number, '')
     )
-    AND t.status = COALESCE(NULLIF($3::text, '')::transfer_status, t.status)
-    AND t.reference = COALESCE(NULLIF($4::text, ''), t.reference)
+    AND t.status = COALESCE(NULLIF(sqlc.arg(status)::text, '')::transfer_status, t.status)
+    AND t.reference = COALESCE(NULLIF(sqlc.arg(reference)::text, ''), t.reference)
     AND t.route_id = COALESCE(
         NULLIF(
-            $5::uuid,
+            sqlc.arg(route_id)::uuid,
             '00000000-0000-0000-0000-000000000000'::uuid
         ),
         t.route_id
     )
 ORDER BY t.created_at DESC
-LIMIT $6 OFFSET $7;
+LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
 -- name: GetAllTransfersCount :one
 SELECT COUNT(*)
 FROM transfers t
 WHERE t.deleted_at IS NULL
-    AND t.sender_phone = COALESCE(NULLIF($1::text, ''), t.sender_phone)
+    AND t.sender_phone = COALESCE(NULLIF(sqlc.arg(sender_phone)::text, ''), t.sender_phone)
     AND COALESCE(t.receiving_mobile_money_number, '') = COALESCE(
-        NULLIF($2::text, ''),
+        NULLIF(sqlc.arg(recipient_phone)::text, ''),
         COALESCE(t.receiving_mobile_money_number, '')
     )
-    AND t.status = COALESCE(NULLIF($3::text, '')::transfer_status, t.status)
-    AND t.reference = COALESCE(NULLIF($4::text, ''), t.reference)
+    AND t.status = COALESCE(NULLIF(sqlc.arg(status)::text, '')::transfer_status, t.status)
+    AND t.reference = COALESCE(NULLIF(sqlc.arg(reference)::text, ''), t.reference)
     AND t.route_id = COALESCE(
         NULLIF(
-            $5::uuid,
+            sqlc.arg(route_id)::uuid,
             '00000000-0000-0000-0000-000000000000'::uuid
         ),
         t.route_id
