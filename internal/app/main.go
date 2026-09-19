@@ -12,6 +12,7 @@ import (
 	"cnmt/internal/features/countries"
 	"cnmt/internal/features/dashboard"
 	"cnmt/internal/features/paymentaccounts"
+	"cnmt/internal/features/promocodes"
 	"cnmt/internal/features/transfers"
 	"cnmt/internal/infra/db"
 	"cnmt/internal/infra/notifications"
@@ -141,12 +142,18 @@ func initRoutes(r *chi.Mux, config RoutesConfig) {
 	countryCtrl := countries.NewController(countries.NewService(config.dbQueries, config.logger, config.dbConn))
 	paymentAccountCtrl := paymentaccounts.NewController(paymentaccounts.NewService(config.dbQueries, config.logger))
 	dashboardCtrl := dashboard.NewController(dashboard.NewService(config.dbQueries, config.logger))
+	promoCodeCtrl := promocodes.NewController(promocodes.NewService(promocodes.ServiceConfig{
+		DB: config.dbConn,
+		Queries: config.dbQueries,
+		Logger: config.logger,
+	}))
 
 	r.Route("/api/v1", func(r chi.Router) {
 		transferCtrl.Routes(r)
 		countryCtrl.Routes(r)
 		paymentAccountCtrl.Routes(r)
 		authCtrl.Routes(r)
+		promoCodeCtrl.Routes(r)
 
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware.Verifier())
@@ -157,6 +164,7 @@ func initRoutes(r *chi.Mux, config RoutesConfig) {
 				countryCtrl.AdminRoutes(r)
 				paymentAccountCtrl.AdminRoutes(r)
 				dashboardCtrl.AdminRoutes(r)
+				promoCodeCtrl.AdminRoutes(r)
 				authCtrl.AuthenticatedRoutes(r)
 			})
 		})

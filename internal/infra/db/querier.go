@@ -13,9 +13,12 @@ import (
 
 type Querier interface {
 	CompleteIdempotencyKey(ctx context.Context, arg CompleteIdempotencyKeyParams) error
+	CountRedemptionsByPromoCodeAndSender(ctx context.Context, arg CountRedemptionsByPromoCodeAndSenderParams) (int64, error)
+	CountRedemptionsByPromoCodeID(ctx context.Context, promoCodeID uuid.UUID) (int64, error)
 	CreateCountry(ctx context.Context, arg CreateCountryParams) (Country, error)
 	CreatePaymentAccount(ctx context.Context, arg CreatePaymentAccountParams) (PaymentAccount, error)
 	CreatePaymentChannel(ctx context.Context, arg CreatePaymentChannelParams) (PaymentChannel, error)
+	CreatePromoCode(ctx context.Context, arg CreatePromoCodeParams) (PromoCode, error)
 	CreateRoute(ctx context.Context, arg CreateRouteParams) (Route, error)
 	CreateTransfer(ctx context.Context, arg CreateTransferParams) (uuid.UUID, error)
 	CreateTransferEvent(ctx context.Context, arg CreateTransferEventParams) (TransferEvent, error)
@@ -32,6 +35,7 @@ type Querier interface {
 	DeleteCountry(ctx context.Context, id int64) (Country, error)
 	DeletePaymentAccount(ctx context.Context, id uuid.UUID) (PaymentAccount, error)
 	DeletePaymentChannel(ctx context.Context, id uuid.UUID) (PaymentChannel, error)
+	DeletePromoCode(ctx context.Context, id uuid.UUID) error
 	DeleteRoute(ctx context.Context, id uuid.UUID) (Route, error)
 	DoesPaymentChannelExist(ctx context.Context, arg DoesPaymentChannelExistParams) (uuid.UUID, error)
 	GetActivePCByCountryTypeAndID(ctx context.Context, arg GetActivePCByCountryTypeAndIDParams) (PaymentChannel, error)
@@ -40,6 +44,7 @@ type Querier interface {
 	GetAdminCountryByID(ctx context.Context, id int64) (Country, error)
 	GetAllActiveRouteDestinations(ctx context.Context) ([]GetAllActiveRouteDestinationsRow, error)
 	GetAllCountries(ctx context.Context) ([]Country, error)
+	GetAllPromoCodes(ctx context.Context) ([]GetAllPromoCodesRow, error)
 	GetAllSourceCountries(ctx context.Context) ([]GetAllSourceCountriesRow, error)
 	GetAllTransfers(ctx context.Context, arg GetAllTransfersParams) ([]GetAllTransfersRow, error)
 	GetAllTransfersCount(ctx context.Context, arg GetAllTransfersCountParams) (int64, error)
@@ -51,6 +56,9 @@ type Querier interface {
 	GetPaymentChannelByCountryID(ctx context.Context, countryID int64) (PaymentChannel, error)
 	GetPaymentChannelByID(ctx context.Context, id uuid.UUID) (PaymentChannel, error)
 	GetPaymentChannelsByCountryID(ctx context.Context, countryID int64) ([]PaymentChannel, error)
+	GetPromoCodeByCode(ctx context.Context, btrim string) (GetPromoCodeByCodeRow, error)
+	GetPromoCodeByCodeForUpdate(ctx context.Context, btrim string) (GetPromoCodeByCodeForUpdateRow, error)
+	GetPromoCodeByID(ctx context.Context, id uuid.UUID) (GetPromoCodeByIDRow, error)
 	GetTransferByID(ctx context.Context, id uuid.UUID) (GetTransferByIDRow, error)
 	GetTransferByReference(ctx context.Context, reference string) (GetTransferByReferenceRow, error)
 	GetTransferEventsByTransferID(ctx context.Context, transferID uuid.UUID) ([]TransferEvent, error)
@@ -60,6 +68,7 @@ type Querier interface {
 	ListActivePaymentAccountsByCountryID(ctx context.Context, countryID int64) ([]ListActivePaymentAccountsByCountryIDRow, error)
 	ListPaymentAccounts(ctx context.Context, arg ListPaymentAccountsParams) ([]ListPaymentAccountsRow, error)
 	ListRoutes(ctx context.Context, arg ListRoutesParams) ([]Route, error)
+	RedeemPromoCode(ctx context.Context, arg RedeemPromoCodeParams) (uuid.UUID, error)
 	SetPaymentAccountActive(ctx context.Context, arg SetPaymentAccountActiveParams) (PaymentAccount, error)
 	SetPaymentProofKey(ctx context.Context, arg SetPaymentProofKeyParams) error
 	ToggleRouteActive(ctx context.Context, id uuid.UUID) (Route, error)
@@ -67,6 +76,7 @@ type Querier interface {
 	UpdateCountry(ctx context.Context, arg UpdateCountryParams) (Country, error)
 	UpdatePaymentAccount(ctx context.Context, arg UpdatePaymentAccountParams) (PaymentAccount, error)
 	UpdatePaymentChannel(ctx context.Context, arg UpdatePaymentChannelParams) (PaymentChannel, error)
+	UpdatePromoCode(ctx context.Context, arg UpdatePromoCodeParams) (UpdatePromoCodeRow, error)
 	UpdateRoute(ctx context.Context, arg UpdateRouteParams) (Route, error)
 }
 

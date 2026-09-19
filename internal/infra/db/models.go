@@ -241,6 +241,28 @@ type PaymentChannel struct {
 	DeletedAt   pgtype.Timestamptz
 }
 
+type PromoCode struct {
+	ID                 uuid.UUID
+	Code               string
+	DiscountPercentage pgtype.Numeric
+	StartDate          time.Time
+	EndDate            time.Time
+	MaxUses            int32
+	MaxUsesPerUser     int32
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	DeletedAt          pgtype.Timestamptz
+}
+
+type PromoCodeRedemption struct {
+	ID                 uuid.UUID
+	PromoCodeID        uuid.UUID
+	TransferID         uuid.UUID
+	SenderPhone        string
+	DiscountPercentage pgtype.Numeric
+	UsedAt             time.Time
+}
+
 type Route struct {
 	ID                   uuid.UUID
 	SourceCountryID      int64
