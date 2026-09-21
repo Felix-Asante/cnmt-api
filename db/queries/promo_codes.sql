@@ -7,50 +7,34 @@ INSERT INTO promo_codes (
         max_uses,
         max_uses_per_user
     )
-VALUES (UPPER(trim($1)), $2, $3, $4, $5, $6)
+VALUES (
+        UPPER(trim(sqlc.arg(code))),
+        sqlc.arg(discount_percentage),
+        sqlc.arg(start_date),
+        sqlc.arg(end_date),
+        sqlc.arg(max_uses),
+        sqlc.arg(max_uses_per_user)
+    )
 RETURNING *;
 -- name: GetPromoCodeByCode :one
-SELECT id,
-    code,
-    discount_percentage,
-    start_date,
-    end_date,
-    max_uses,
-    max_uses_per_user,
-    created_at,
-    updated_at
+SELECT *
 FROM promo_codes
-WHERE code = UPPER(trim($1))
+WHERE code = UPPER(trim(sqlc.arg(code)))
     AND deleted_at IS NULL;
 -- name: GetAllPromoCodes :many
-SELECT id,
-    code,
-    discount_percentage,
-    start_date,
-    end_date,
-    max_uses,
-    max_uses_per_user,
-    created_at,
-    updated_at
+SELECT *
 FROM promo_codes
 WHERE deleted_at IS NULL
 ORDER BY created_at DESC;
--- name: DeletePromoCode :exec
+-- name: DeletePromoCode :one
 UPDATE promo_codes
-SET deleted_at = NOW(),
-    updated_at = NOW()
+SET deleted_at = now(),
+    updated_at = now()
 WHERE id = $1
-    AND deleted_at IS NULL;
+    AND deleted_at IS NULL
+RETURNING *;
 -- name: GetPromoCodeByID :one
-SELECT id,
-    code,
-    discount_percentage,
-    start_date,
-    end_date,
-    max_uses,
-    max_uses_per_user,
-    created_at,
-    updated_at
+SELECT *
 FROM promo_codes
 WHERE id = $1
     AND deleted_at IS NULL;
@@ -61,32 +45,16 @@ SET discount_percentage = $2,
     end_date = $4,
     max_uses = $5,
     max_uses_per_user = $6,
-    updated_at = NOW()
+    updated_at = now()
 WHERE id = $1
     AND deleted_at IS NULL
-RETURNING id,
-    code,
-    discount_percentage,
-    start_date,
-    end_date,
-    max_uses,
-    max_uses_per_user,
-    created_at,
-    updated_at;
+RETURNING *;
 -- name: GetPromoCodeByCodeForUpdate :one
-SELECT id,
-    code,
-    discount_percentage,
-    start_date,
-    end_date,
-    max_uses,
-    max_uses_per_user,
-    created_at,
-    updated_at
+SELECT *
 FROM promo_codes
-WHERE code = UPPER(trim($1))
-    AND deleted_at IS NULL FOR
-UPDATE;
+WHERE code = UPPER(trim(sqlc.arg(code)))
+    AND deleted_at IS NULL
+FOR UPDATE;
 -- name: RedeemPromoCode :one
 INSERT INTO promo_code_redemptions (
         promo_code_id,

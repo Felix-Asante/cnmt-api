@@ -54,12 +54,19 @@ INSERT INTO promo_codes (
         max_uses,
         max_uses_per_user
     )
-VALUES (UPPER(trim($1)), $2, $3, $4, $5, $6)
+VALUES (
+        UPPER(trim($1)),
+        $2,
+        $3,
+        $4,
+        $5,
+        $6
+    )
 RETURNING id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at
 `
 
 type CreatePromoCodeParams struct {
-	Btrim              string
+	Code               string
 	DiscountPercentage pgtype.Numeric
 	StartDate          time.Time
 	EndDate            time.Time
@@ -69,7 +76,7 @@ type CreatePromoCodeParams struct {
 
 func (q *Queries) CreatePromoCode(ctx context.Context, arg CreatePromoCodeParams) (PromoCode, error) {
 	row := q.db.QueryRow(ctx, createPromoCode,
-		arg.Btrim,
+		arg.Code,
 		arg.DiscountPercentage,
 		arg.StartDate,
 		arg.EndDate,
@@ -92,55 +99,49 @@ func (q *Queries) CreatePromoCode(ctx context.Context, arg CreatePromoCodeParams
 	return i, err
 }
 
-const deletePromoCode = `-- name: DeletePromoCode :exec
+const deletePromoCode = `-- name: DeletePromoCode :one
 UPDATE promo_codes
-SET deleted_at = NOW(),
-    updated_at = NOW()
+SET deleted_at = now(),
+    updated_at = now()
 WHERE id = $1
     AND deleted_at IS NULL
+RETURNING id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at
 `
 
-func (q *Queries) DeletePromoCode(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deletePromoCode, id)
-	return err
+func (q *Queries) DeletePromoCode(ctx context.Context, id uuid.UUID) (PromoCode, error) {
+	row := q.db.QueryRow(ctx, deletePromoCode, id)
+	var i PromoCode
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.DiscountPercentage,
+		&i.StartDate,
+		&i.EndDate,
+		&i.MaxUses,
+		&i.MaxUsesPerUser,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
 }
 
 const getAllPromoCodes = `-- name: GetAllPromoCodes :many
-SELECT id,
-    code,
-    discount_percentage,
-    start_date,
-    end_date,
-    max_uses,
-    max_uses_per_user,
-    created_at,
-    updated_at
+SELECT id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at
 FROM promo_codes
 WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 `
 
-type GetAllPromoCodesRow struct {
-	ID                 uuid.UUID
-	Code               string
-	DiscountPercentage pgtype.Numeric
-	StartDate          time.Time
-	EndDate            time.Time
-	MaxUses            int32
-	MaxUsesPerUser     int32
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-}
-
-func (q *Queries) GetAllPromoCodes(ctx context.Context) ([]GetAllPromoCodesRow, error) {
+func (q *Queries) GetAllPromoCodes(ctx context.Context) ([]PromoCode, error) {
 	rows, err := q.db.Query(ctx, getAllPromoCodes)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []GetAllPromoCodesRow{}
+	items := []PromoCode{}
 	for rows.Next() {
-		var i GetAllPromoCodesRow
+		var i PromoCode
 		if err := rows.Scan(
 			&i.ID,
 			&i.Code,
@@ -151,6 +152,7 @@ func (q *Queries) GetAllPromoCodes(ctx context.Context) ([]GetAllPromoCodesRow, 
 			&i.MaxUsesPerUser,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -163,35 +165,15 @@ func (q *Queries) GetAllPromoCodes(ctx context.Context) ([]GetAllPromoCodesRow, 
 }
 
 const getPromoCodeByCode = `-- name: GetPromoCodeByCode :one
-SELECT id,
-    code,
-    discount_percentage,
-    start_date,
-    end_date,
-    max_uses,
-    max_uses_per_user,
-    created_at,
-    updated_at
+SELECT id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at
 FROM promo_codes
 WHERE code = UPPER(trim($1))
     AND deleted_at IS NULL
 `
 
-type GetPromoCodeByCodeRow struct {
-	ID                 uuid.UUID
-	Code               string
-	DiscountPercentage pgtype.Numeric
-	StartDate          time.Time
-	EndDate            time.Time
-	MaxUses            int32
-	MaxUsesPerUser     int32
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-}
-
-func (q *Queries) GetPromoCodeByCode(ctx context.Context, btrim string) (GetPromoCodeByCodeRow, error) {
-	row := q.db.QueryRow(ctx, getPromoCodeByCode, btrim)
-	var i GetPromoCodeByCodeRow
+func (q *Queries) GetPromoCodeByCode(ctx context.Context, code string) (PromoCode, error) {
+	row := q.db.QueryRow(ctx, getPromoCodeByCode, code)
+	var i PromoCode
 	err := row.Scan(
 		&i.ID,
 		&i.Code,
@@ -202,41 +184,22 @@ func (q *Queries) GetPromoCodeByCode(ctx context.Context, btrim string) (GetProm
 		&i.MaxUsesPerUser,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const getPromoCodeByCodeForUpdate = `-- name: GetPromoCodeByCodeForUpdate :one
-SELECT id,
-    code,
-    discount_percentage,
-    start_date,
-    end_date,
-    max_uses,
-    max_uses_per_user,
-    created_at,
-    updated_at
+SELECT id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at
 FROM promo_codes
 WHERE code = UPPER(trim($1))
-    AND deleted_at IS NULL FOR
-UPDATE
+    AND deleted_at IS NULL
+FOR UPDATE
 `
 
-type GetPromoCodeByCodeForUpdateRow struct {
-	ID                 uuid.UUID
-	Code               string
-	DiscountPercentage pgtype.Numeric
-	StartDate          time.Time
-	EndDate            time.Time
-	MaxUses            int32
-	MaxUsesPerUser     int32
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-}
-
-func (q *Queries) GetPromoCodeByCodeForUpdate(ctx context.Context, btrim string) (GetPromoCodeByCodeForUpdateRow, error) {
-	row := q.db.QueryRow(ctx, getPromoCodeByCodeForUpdate, btrim)
-	var i GetPromoCodeByCodeForUpdateRow
+func (q *Queries) GetPromoCodeByCodeForUpdate(ctx context.Context, code string) (PromoCode, error) {
+	row := q.db.QueryRow(ctx, getPromoCodeByCodeForUpdate, code)
+	var i PromoCode
 	err := row.Scan(
 		&i.ID,
 		&i.Code,
@@ -247,40 +210,21 @@ func (q *Queries) GetPromoCodeByCodeForUpdate(ctx context.Context, btrim string)
 		&i.MaxUsesPerUser,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const getPromoCodeByID = `-- name: GetPromoCodeByID :one
-SELECT id,
-    code,
-    discount_percentage,
-    start_date,
-    end_date,
-    max_uses,
-    max_uses_per_user,
-    created_at,
-    updated_at
+SELECT id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at
 FROM promo_codes
 WHERE id = $1
     AND deleted_at IS NULL
 `
 
-type GetPromoCodeByIDRow struct {
-	ID                 uuid.UUID
-	Code               string
-	DiscountPercentage pgtype.Numeric
-	StartDate          time.Time
-	EndDate            time.Time
-	MaxUses            int32
-	MaxUsesPerUser     int32
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-}
-
-func (q *Queries) GetPromoCodeByID(ctx context.Context, id uuid.UUID) (GetPromoCodeByIDRow, error) {
+func (q *Queries) GetPromoCodeByID(ctx context.Context, id uuid.UUID) (PromoCode, error) {
 	row := q.db.QueryRow(ctx, getPromoCodeByID, id)
-	var i GetPromoCodeByIDRow
+	var i PromoCode
 	err := row.Scan(
 		&i.ID,
 		&i.Code,
@@ -291,6 +235,7 @@ func (q *Queries) GetPromoCodeByID(ctx context.Context, id uuid.UUID) (GetPromoC
 		&i.MaxUsesPerUser,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
@@ -332,18 +277,10 @@ SET discount_percentage = $2,
     end_date = $4,
     max_uses = $5,
     max_uses_per_user = $6,
-    updated_at = NOW()
+    updated_at = now()
 WHERE id = $1
     AND deleted_at IS NULL
-RETURNING id,
-    code,
-    discount_percentage,
-    start_date,
-    end_date,
-    max_uses,
-    max_uses_per_user,
-    created_at,
-    updated_at
+RETURNING id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at
 `
 
 type UpdatePromoCodeParams struct {
@@ -355,19 +292,7 @@ type UpdatePromoCodeParams struct {
 	MaxUsesPerUser     int32
 }
 
-type UpdatePromoCodeRow struct {
-	ID                 uuid.UUID
-	Code               string
-	DiscountPercentage pgtype.Numeric
-	StartDate          time.Time
-	EndDate            time.Time
-	MaxUses            int32
-	MaxUsesPerUser     int32
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-}
-
-func (q *Queries) UpdatePromoCode(ctx context.Context, arg UpdatePromoCodeParams) (UpdatePromoCodeRow, error) {
+func (q *Queries) UpdatePromoCode(ctx context.Context, arg UpdatePromoCodeParams) (PromoCode, error) {
 	row := q.db.QueryRow(ctx, updatePromoCode,
 		arg.ID,
 		arg.DiscountPercentage,
@@ -376,7 +301,7 @@ func (q *Queries) UpdatePromoCode(ctx context.Context, arg UpdatePromoCodeParams
 		arg.MaxUses,
 		arg.MaxUsesPerUser,
 	)
-	var i UpdatePromoCodeRow
+	var i PromoCode
 	err := row.Scan(
 		&i.ID,
 		&i.Code,
@@ -387,6 +312,7 @@ func (q *Queries) UpdatePromoCode(ctx context.Context, arg UpdatePromoCodeParams
 		&i.MaxUsesPerUser,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }

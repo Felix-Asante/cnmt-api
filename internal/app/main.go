@@ -33,9 +33,9 @@ type AppConfig struct {
 }
 
 type App struct {
-	Router *chi.Mux
+	Router       *chi.Mux
 	WorkerClient *river.Client[pgx.Tx]
-	Logger *slog.Logger
+	Logger       *slog.Logger
 }
 
 func NewApp(dbConn *pgxpool.Pool) *AppConfig {
@@ -78,7 +78,6 @@ func (app *AppConfig) Run() (*App, error) {
 		return nil, fmt.Errorf("failed to initialize workers: %v", workerErr)
 	}
 
-	
 	httpx.InitValidator()
 
 	r.Use(middleware.Logger)
@@ -110,10 +109,10 @@ func (app *AppConfig) Run() (*App, error) {
 }
 
 type RoutesConfig struct {
-	dbConn     *pgxpool.Pool
-	dbQueries *db.Queries
-	objStorage *storage.ObjStorage
-	logger     *slog.Logger
+	dbConn       *pgxpool.Pool
+	dbQueries    *db.Queries
+	objStorage   *storage.ObjStorage
+	logger       *slog.Logger
 	workerClient *river.Client[pgx.Tx]
 }
 
@@ -142,11 +141,7 @@ func initRoutes(r *chi.Mux, config RoutesConfig) {
 	countryCtrl := countries.NewController(countries.NewService(config.dbQueries, config.logger, config.dbConn))
 	paymentAccountCtrl := paymentaccounts.NewController(paymentaccounts.NewService(config.dbQueries, config.logger))
 	dashboardCtrl := dashboard.NewController(dashboard.NewService(config.dbQueries, config.logger))
-	promoCodeCtrl := promocodes.NewController(promocodes.NewService(promocodes.ServiceConfig{
-		DB: config.dbConn,
-		Queries: config.dbQueries,
-		Logger: config.logger,
-	}))
+	promoCodeCtrl := promocodes.NewController(promocodes.NewService(config.dbQueries, config.logger))
 
 	r.Route("/api/v1", func(r chi.Router) {
 		transferCtrl.Routes(r)
