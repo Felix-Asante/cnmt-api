@@ -23,6 +23,8 @@ type createTransferRequest struct {
 	Recipient *recipientDTO `json:"recipient" validate:"required"`
 
 	Notes *string `json:"notes,omitempty" validate:"omitempty,max=500"`
+
+	PromoCode string `json:"promo_code,omitempty" validate:"omitempty,min=1,max=64"`
 }
 
 type recipientDTO struct {
@@ -39,16 +41,22 @@ type recipientDTO struct {
 }
 
 type createTransferResponse struct {
-	TransferID                 uuid.UUID `json:"transfer_id"`
-	Reference                  string    `json:"reference"`
-	ExpiresIn                  int64     `json:"expires_in"`
-	SourceCountryName          string    `json:"-"`
-	DestinationCountryName     string    `json:"-"`
-	SourceCountryCurrency      string    `json:"-"`
-	DestinationCountryCurrency string    `json:"-"`
-	Fee                        string    `json:"-"`
-	AmountPaid                 string    `json:"-"`
-	AmountReceived             string    `json:"-"`
+	TransferID                 uuid.UUID         `json:"transfer_id"`
+	Reference                  string            `json:"reference"`
+	ExpiresIn                  int64             `json:"expires_in"`
+	SourceCountryName          string            `json:"-"`
+	DestinationCountryName     string            `json:"-"`
+	SourceCountryCurrency      string            `json:"-"`
+	DestinationCountryCurrency string            `json:"-"`
+	Fee                        string            `json:"-"`
+	AmountPaid                 string            `json:"-"`
+	AmountReceived             string            `json:"-"`
+	PromoCode                  *promoCodeViewDTO `json:"promo_code,omitempty"`
+}
+
+type promoCodeViewDTO struct {
+	Code               string          `json:"code"`
+	DiscountPercentage decimal.Decimal `json:"discount_percentage"`
 }
 
 type countryDTO struct {
@@ -74,12 +82,12 @@ type recipientViewDTO struct {
 }
 
 type paymentInstructionsDTO struct {
-	PaymentAccountID *uuid.UUID             `json:"payment_account_id,omitempty"`
-	PaymentMethod    *db.ReceivingMethods   `json:"payment_method,omitempty"`
-	AccountName      *string                `json:"account_name,omitempty"`
-	AccountNumber    *string                `json:"account_number,omitempty"`
-	ChannelName      *string                `json:"channel_name,omitempty"`
-	CurrencyCode     *string                `json:"currency_code,omitempty"`
+	PaymentAccountID *uuid.UUID           `json:"payment_account_id,omitempty"`
+	PaymentMethod    *db.ReceivingMethods `json:"payment_method,omitempty"`
+	AccountName      *string              `json:"account_name,omitempty"`
+	AccountNumber    *string              `json:"account_number,omitempty"`
+	ChannelName      *string              `json:"channel_name,omitempty"`
+	CurrencyCode     *string              `json:"currency_code,omitempty"`
 }
 
 type getTransferResponse struct {
@@ -96,11 +104,11 @@ type getTransferResponse struct {
 	PaymentProofURL     *string                 `json:"payment_proof_url,omitempty"`
 	PaymentInstructions *paymentInstructionsDTO `json:"payment_instructions,omitempty"`
 	Recipient           recipientViewDTO        `json:"recipient"`
+	PromoCode           *promoCodeViewDTO       `json:"promo_code,omitempty"`
 	Notes               *string                 `json:"notes,omitempty"`
 	ExpiresAt           time.Time               `json:"expires_at"`
 	CreatedAt           time.Time               `json:"created_at"`
 }
-
 
 type createPaymentProofSignedUrlRequest struct {
 	Reference   string `json:"reference" validate:"required"`
@@ -124,26 +132,26 @@ type adminActionRequest struct {
 }
 
 type adminActionResponse struct {
-	Reference string          `json:"reference"`
+	Reference string            `json:"reference"`
 	Status    db.TransferStatus `json:"status"`
 }
 
 type transferEventDTO struct {
-	ID        uuid.UUID        `json:"id"`
+	ID        uuid.UUID         `json:"id"`
 	Status    db.TransferStatus `json:"status"`
-	Actor     string           `json:"actor"`
-	Note      *string          `json:"note,omitempty"`
-	CreatedAt time.Time        `json:"created_at"`
+	Actor     string            `json:"actor"`
+	Note      *string           `json:"note,omitempty"`
+	CreatedAt time.Time         `json:"created_at"`
 }
 
 type getAllTransfersRequest struct {
-	SenderPhone    *string              `json:"sender_phone" validate:"omitempty,e164"`
-	RecipientPhone *string              `json:"recipient_phone" validate:"omitempty,e164"`
-	RouteID        *uuid.UUID           `json:"route_id" validate:"omitempty,uuid"`
-	Reference      *string              `json:"reference" validate:"omitempty,min=1,max=100"`
-	Status         *db.TransferStatus   `json:"status" validate:"omitempty,oneof=PENDING_PAYMENT PAYMENT_RECEIVED VERIFYING PROCESSING COMPLETED FAILED CANCELLED"`
-	Page           *int                 `json:"page" validate:"omitempty,gte=1"`
-	Limit          *int                 `json:"limit" validate:"omitempty,gte=1,lte=100"`
+	SenderPhone    *string            `json:"sender_phone" validate:"omitempty,e164"`
+	RecipientPhone *string            `json:"recipient_phone" validate:"omitempty,e164"`
+	RouteID        *uuid.UUID         `json:"route_id" validate:"omitempty,uuid"`
+	Reference      *string            `json:"reference" validate:"omitempty,min=1,max=100"`
+	Status         *db.TransferStatus `json:"status" validate:"omitempty,oneof=PENDING_PAYMENT PAYMENT_RECEIVED VERIFYING PROCESSING COMPLETED FAILED CANCELLED"`
+	Page           *int               `json:"page" validate:"omitempty,gte=1"`
+	Limit          *int               `json:"limit" validate:"omitempty,gte=1,lte=100"`
 }
 
 type getAllTransfersResponse struct {
@@ -203,6 +211,8 @@ type transferRow struct {
 	ReceivingNetworkName       *string
 	ReceivingBankName          *string
 	ReceivingBankAccount       *string
+	PromoCode                  *string
+	PromoDiscountPercentage    pgtype.Numeric
 	Notes                      *string
 	ExpiresAt                  time.Time
 	CreatedAt                  time.Time
@@ -239,6 +249,8 @@ func transferRowFromReference(row db.GetTransferByReferenceRow) transferRow {
 		ReceivingNetworkName:       row.ReceivingNetworkName,
 		ReceivingBankName:          row.ReceivingBankName,
 		ReceivingBankAccount:       row.ReceivingBankAccount,
+		PromoCode:                  row.PromoCode,
+		PromoDiscountPercentage:    row.PromoDiscountPercentage,
 		Notes:                      row.Notes,
 		ExpiresAt:                  row.ExpiresAt,
 		CreatedAt:                  row.CreatedAt,
@@ -276,6 +288,8 @@ func transferRowFromList(row db.GetAllTransfersRow) transferRow {
 		ReceivingNetworkName:       row.ReceivingNetworkName,
 		ReceivingBankName:          row.ReceivingBankName,
 		ReceivingBankAccount:       row.ReceivingBankAccount,
+		PromoCode:                  row.PromoCode,
+		PromoDiscountPercentage:    row.PromoDiscountPercentage,
 		Notes:                      row.Notes,
 		ExpiresAt:                  row.ExpiresAt,
 		CreatedAt:                  row.CreatedAt,
@@ -296,6 +310,10 @@ func mapTransferRowToDTO(transfer transferRow) (getTransferResponse, error) {
 		return getTransferResponse{}, err
 	}
 	fee, err := common.PgNumericToDecimal(transfer.Fee)
+	if err != nil {
+		return getTransferResponse{}, err
+	}
+	promo, err := mapPromoCode(transfer)
 	if err != nil {
 		return getTransferResponse{}, err
 	}
@@ -320,10 +338,10 @@ func mapTransferRowToDTO(transfer transferRow) (getTransferResponse, error) {
 				CurrencySymbol: transfer.DestinationCurrencySymbol,
 			},
 		},
-		AmountSent:     amountSent,
-		AmountReceived: amountReceived,
-		ExchangeRate:   exchangeRate,
-		Fee:            fee,
+		AmountSent:          amountSent,
+		AmountReceived:      amountReceived,
+		ExchangeRate:        exchangeRate,
+		Fee:                 fee,
 		SenderPhone:         transfer.SenderPhone,
 		PaymentProofKey:     transfer.PaymentProofKey,
 		PaymentInstructions: mapPaymentInstructions(transfer),
@@ -335,12 +353,27 @@ func mapTransferRowToDTO(transfer transferRow) (getTransferResponse, error) {
 			BankName:        transfer.ReceivingBankName,
 			AccountNumber:   transfer.ReceivingBankAccount,
 		},
+		PromoCode: promo,
 		Notes:     transfer.Notes,
 		ExpiresAt: transfer.ExpiresAt,
 		CreatedAt: transfer.CreatedAt,
 	}
 
 	return resp, nil
+}
+
+func mapPromoCode(transfer transferRow) (*promoCodeViewDTO, error) {
+	if transfer.PromoCode == nil {
+		return nil, nil
+	}
+	discount, err := common.PgNumericToDecimal(transfer.PromoDiscountPercentage)
+	if err != nil {
+		return nil, err
+	}
+	return &promoCodeViewDTO{
+		Code:               *transfer.PromoCode,
+		DiscountPercentage: discount,
+	}, nil
 }
 
 func mapPaymentInstructions(transfer transferRow) *paymentInstructionsDTO {

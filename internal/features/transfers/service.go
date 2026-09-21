@@ -15,6 +15,7 @@ import (
 	"cnmt/internal/common"
 	"cnmt/internal/common/httpx"
 	"cnmt/internal/features/countries"
+	"cnmt/internal/features/promocodes"
 	"cnmt/internal/infra/db"
 	"cnmt/internal/infra/storage"
 	"cnmt/internal/infra/workers"
@@ -28,23 +29,32 @@ import (
 )
 
 type Service struct {
-	db      *pgxpool.Pool
-	queries *db.Queries
-	objStorage *storage.ObjStorage
-	logger *slog.Logger
+	db           *pgxpool.Pool
+	queries      *db.Queries
+	objStorage   *storage.ObjStorage
+	logger       *slog.Logger
 	workerClient *river.Client[pgx.Tx]
+	promoCodes   *promocodes.Service
 }
 
 type ServiceConfig struct {
-	DB *pgxpool.Pool
-	Queries *db.Queries
-	ObjStorage *storage.ObjStorage
-	Logger *slog.Logger
+	DB           *pgxpool.Pool
+	Queries      *db.Queries
+	ObjStorage   *storage.ObjStorage
+	Logger       *slog.Logger
 	WorkerClient *river.Client[pgx.Tx]
+	PromoCodes   *promocodes.Service
 }
 
 func NewService(config ServiceConfig) *Service {
-	return &Service{db: config.DB, queries: config.Queries, objStorage: config.ObjStorage, logger: config.Logger, workerClient: config.WorkerClient}
+	return &Service{
+		db:           config.DB,
+		queries:      config.Queries,
+		objStorage:   config.ObjStorage,
+		logger:       config.Logger,
+		workerClient: config.WorkerClient,
+		promoCodes:   config.PromoCodes,
+	}
 }
 
 func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest, idemKey string) (createTransferResponse, error) {
@@ -164,7 +174,7 @@ func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body create
 	}
 
 	amtPaid, err := decimal.NewFromString(body.AmountSent)
-	if err != nil {	
+	if err != nil {
 		s.logger.Error("failed to convert amount sent to decimal", "error", err)
 		return createTransferResponse{}, fmt.Errorf("%w: amount sent is not valid", httpx.BadRequestError)
 	}
@@ -185,6 +195,16 @@ func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body create
 	if err != nil {
 		s.logger.Error("failed to calculate fee", "error", err)
 		return createTransferResponse{}, err
+	}
+
+	var appliedPromo *db.PromoCode
+	if body.PromoCode != "" {
+		promo, discountedFee, err := s.promoCodes.ApplyToFee(ctx, q, body.PromoCode, body.SenderPhone, calculatedFee)
+		if err != nil {
+			return createTransferResponse{}, err
+		}
+		calculatedFee = discountedFee
+		appliedPromo = &promo
 	}
 
 	amtToReceive := common.RoundMoney(amtPaid.Mul(rate).Sub(calculatedFee))
@@ -246,18 +266,36 @@ func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body create
 		return createTransferResponse{}, common.TranslateDBError(err)
 	}
 
-	return createTransferResponse{
-		TransferID:                  transferID,
-		Reference:                   reference,
-		ExpiresIn:                   expiresAt.Unix(),
-		SourceCountryName:           route.SourceCountryName,
-		DestinationCountryName:      route.DestinationCountryName,
-		SourceCountryCurrency:       route.SourceCurrencySymbol,
-		DestinationCountryCurrency:  route.DestinationCurrencySymbol,
-		Fee:                         calculatedFee.StringFixed(common.MoneyDecimalPlaces),
-		AmountPaid:                  amtPaid.StringFixed(common.MoneyDecimalPlaces),
-		AmountReceived:              amtToReceive.StringFixed(common.MoneyDecimalPlaces),
-	}, nil
+	if appliedPromo != nil {
+		if err := s.promoCodes.RedeemForTransfer(ctx, q, *appliedPromo, transferID, body.SenderPhone); err != nil {
+			return createTransferResponse{}, err
+		}
+	}
+
+	resp := createTransferResponse{
+		TransferID:                 transferID,
+		Reference:                  reference,
+		ExpiresIn:                  expiresAt.Unix(),
+		SourceCountryName:          route.SourceCountryName,
+		DestinationCountryName:     route.DestinationCountryName,
+		SourceCountryCurrency:      route.SourceCurrencySymbol,
+		DestinationCountryCurrency: route.DestinationCurrencySymbol,
+		Fee:                        calculatedFee.StringFixed(common.MoneyDecimalPlaces),
+		AmountPaid:                 amtPaid.StringFixed(common.MoneyDecimalPlaces),
+		AmountReceived:             amtToReceive.StringFixed(common.MoneyDecimalPlaces),
+	}
+	if appliedPromo != nil {
+		discount, err := common.PgNumericToDecimal(appliedPromo.DiscountPercentage)
+		if err != nil {
+			s.logger.Error("failed to convert promo discount percentage", "error", err, "promo_code_id", appliedPromo.ID)
+			return createTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
+		}
+		resp.PromoCode = &promoCodeViewDTO{
+			Code:               appliedPromo.Code,
+			DiscountPercentage: discount,
+		}
+	}
+	return resp, nil
 }
 
 func receivingDetails(recipient *recipientDTO) (networkID, bankID pgtype.UUID, mobileNumber, bankAccount *string, err error) {
@@ -367,7 +405,6 @@ func hashCreateTransferRequest(body createTransferRequest) string {
 	sum := sha256.Sum256(payload)
 	return hex.EncodeToString(sum[:])
 }
-
 
 func (s *Service) GetByReference(ctx context.Context, reference string) (getTransferResponse, error) {
 	if reference == "" {
@@ -563,7 +600,6 @@ func (s *Service) GetAllTransfers(ctx context.Context, body getAllTransfersReque
 		Limit:     limit,
 	}, nil
 }
-
 
 func (s *Service) transitionTransfer(ctx context.Context, transferID uuid.UUID, from, to db.TransferStatus, actor string, note *string) (adminActionResponse, error) {
 	tx, err := s.db.Begin(ctx)

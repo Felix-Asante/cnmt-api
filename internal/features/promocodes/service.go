@@ -2,6 +2,7 @@ package promocodes
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -129,6 +130,73 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, data UpdatePromoCode
 	}
 
 	return toGetPromoCodeResponse(promoCode)
+}
+
+
+func (s *Service) ApplyToFee(ctx context.Context, q *db.Queries, code, senderPhone string, fee decimal.Decimal) (db.PromoCode, decimal.Decimal, error) {
+	promo, err := q.GetPromoCodeByCodeForUpdate(ctx, code)
+	if err != nil {
+		translated := common.TranslateDBError(err)
+		if errors.Is(translated, httpx.NotFoundError) {
+			return db.PromoCode{}, decimal.Zero, fmt.Errorf("%w: promo code is not valid", httpx.BadRequestError)
+		}
+		return db.PromoCode{}, decimal.Zero, translated
+	}
+
+	now := time.Now().UTC()
+	if now.Before(promo.StartDate) || now.After(promo.EndDate) {
+		return db.PromoCode{}, decimal.Zero, fmt.Errorf("%w: promo code is not valid", httpx.BadRequestError)
+	}
+
+	used, err := q.CountRedemptionsByPromoCodeID(ctx, promo.ID)
+	if err != nil {
+		s.logger.Error("failed to count promo code redemptions", "error", err, "promo_code_id", promo.ID)
+		return db.PromoCode{}, decimal.Zero, common.TranslateDBError(err)
+	}
+	if used >= int64(promo.MaxUses) {
+		return db.PromoCode{}, decimal.Zero, fmt.Errorf("%w: promo code is not valid", httpx.BadRequestError)
+	}
+
+	usedBySender, err := q.CountRedemptionsByPromoCodeAndSender(ctx, db.CountRedemptionsByPromoCodeAndSenderParams{
+		PromoCodeID: promo.ID,
+		SenderPhone: senderPhone,
+	})
+	if err != nil {
+		s.logger.Error("failed to count promo code redemptions for sender", "error", err, "promo_code_id", promo.ID)
+		return db.PromoCode{}, decimal.Zero, common.TranslateDBError(err)
+	}
+	if usedBySender >= int64(promo.MaxUsesPerUser) {
+		return db.PromoCode{}, decimal.Zero, fmt.Errorf("%w: promo code has already been used", httpx.BadRequestError)
+	}
+
+	pct, err := common.PgNumericToDecimal(promo.DiscountPercentage)
+	if err != nil {
+		s.logger.Error("failed to convert promo discount percentage", "error", err, "promo_code_id", promo.ID)
+		return db.PromoCode{}, decimal.Zero, fmt.Errorf("%w", httpx.InternalServerError)
+	}
+
+	discount := common.RoundMoney(fee.Mul(pct).Div(decimal.NewFromInt(100)))
+	discounted := common.RoundMoney(fee.Sub(discount))
+	if discounted.IsNegative() {
+		discounted = decimal.Zero
+	}
+
+	return promo, discounted, nil
+}
+
+
+func (s *Service) RedeemForTransfer(ctx context.Context, q *db.Queries, promo db.PromoCode, transferID uuid.UUID, senderPhone string) error {
+	_, err := q.RedeemPromoCode(ctx, db.RedeemPromoCodeParams{
+		PromoCodeID:        promo.ID,
+		TransferID:         transferID,
+		SenderPhone:        senderPhone,
+		DiscountPercentage: promo.DiscountPercentage,
+	})
+	if err != nil {
+		s.logger.Error("failed to redeem promo code", "error", err, "promo_code_id", promo.ID, "transfer_id", transferID)
+		return common.TranslateDBError(err)
+	}
+	return nil
 }
 
 func validatePromoCodeInput(discount decimal.Decimal, startDate, endDate time.Time, maxUses, maxUsesPerUser int) error {

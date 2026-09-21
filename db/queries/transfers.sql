@@ -9,13 +9,17 @@ SELECT t.*,
     dst.currency_code AS destination_currency_code,
     dst.currency_symbol AS destination_currency_symbol,
     network.name AS receiving_network_name,
-    bank.name AS receiving_bank_name
+    bank.name AS receiving_bank_name,
+    pc.code AS promo_code,
+    pcr.discount_percentage AS promo_discount_percentage
 FROM transfers t
     JOIN routes r ON r.id = t.route_id
     JOIN countries src ON src.id = r.source_country_id
     JOIN countries dst ON dst.id = r.destination_country_id
     LEFT JOIN payment_channels network ON network.id = t.receiving_money_network_id
     LEFT JOIN payment_channels bank ON bank.id = t.receiving_bank_id
+    LEFT JOIN promo_code_redemptions pcr ON pcr.transfer_id = t.id
+    LEFT JOIN promo_codes pc ON pc.id = pcr.promo_code_id
 WHERE t.reference = $1
     AND t.deleted_at IS NULL;
 -- name: GetTransferByID :one
@@ -103,13 +107,17 @@ SELECT t.*,
     dst.flag AS destination_flag,
     dst.currency_symbol AS destination_currency_symbol,
     network.name AS receiving_network_name,
-    bank.name AS receiving_bank_name
+    bank.name AS receiving_bank_name,
+    pc.code AS promo_code,
+    pcr.discount_percentage AS promo_discount_percentage
 FROM transfers t
     JOIN routes r ON r.id = t.route_id
     JOIN countries src ON src.id = r.source_country_id
     JOIN countries dst ON dst.id = r.destination_country_id
     LEFT JOIN payment_channels network ON network.id = t.receiving_money_network_id
     LEFT JOIN payment_channels bank ON bank.id = t.receiving_bank_id
+    LEFT JOIN promo_code_redemptions pcr ON pcr.transfer_id = t.id
+    LEFT JOIN promo_codes pc ON pc.id = pcr.promo_code_id
 WHERE t.deleted_at IS NULL
     AND t.sender_phone = COALESCE(NULLIF(sqlc.arg(sender_phone)::text, ''), t.sender_phone)
     AND COALESCE(t.receiving_mobile_money_number, '') = COALESCE(

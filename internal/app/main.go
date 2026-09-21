@@ -130,18 +130,20 @@ func initRoutes(r *chi.Mux, config RoutesConfig) {
 	authMiddleware := auth.NewMiddleware(authSvc, jwtAuth)
 	authCtrl := auth.NewController(authSvc)
 
+	promoCodeSvc := promocodes.NewService(config.dbQueries, config.logger)
 	transferServiceConfig := transfers.ServiceConfig{
 		DB:           config.dbConn,
 		Queries:      config.dbQueries,
 		ObjStorage:   config.objStorage,
 		Logger:       config.logger,
 		WorkerClient: config.workerClient,
+		PromoCodes:   promoCodeSvc,
 	}
 	transferCtrl := transfers.NewController(transfers.NewService(transferServiceConfig))
 	countryCtrl := countries.NewController(countries.NewService(config.dbQueries, config.logger, config.dbConn))
 	paymentAccountCtrl := paymentaccounts.NewController(paymentaccounts.NewService(config.dbQueries, config.logger))
 	dashboardCtrl := dashboard.NewController(dashboard.NewService(config.dbQueries, config.logger))
-	promoCodeCtrl := promocodes.NewController(promocodes.NewService(config.dbQueries, config.logger))
+	promoCodeCtrl := promocodes.NewController(promoCodeSvc)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		transferCtrl.Routes(r)
