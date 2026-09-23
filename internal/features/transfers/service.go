@@ -61,6 +61,24 @@ func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest
 	if idemKey == "" {
 		return createTransferResponse{}, fmt.Errorf("%w: idempotency key is required", httpx.BadRequestError)
 	}
+	if body.SourceCountryID == body.DestinationCountryID {
+		return createTransferResponse{}, fmt.Errorf("%w: source and destination countries must be different", httpx.BadRequestError)
+	}
+
+	route, err := s.queries.GetActiveRouteByCountries(ctx, db.GetActiveRouteByCountriesParams{
+		SourceCountryID:      body.SourceCountryID,
+		DestinationCountryID: body.DestinationCountryID,
+	})
+	if err != nil {
+		s.logger.Error("failed to get active route by countries", "error", err)
+		return createTransferResponse{}, common.TranslateDBError(err)
+	}
+
+	body, err = normalizeTransferPhones(body)
+	if err != nil {
+		return createTransferResponse{}, err
+	}
+
 	actorID := body.SenderPhone
 	reqHash := hashCreateTransferRequest(body)
 
@@ -107,7 +125,7 @@ func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest
 		return createTransferResponse{}, fmt.Errorf("%w: request with this idempotency key is already in progress", httpx.ConflictError)
 	}
 
-	resp, err := s.createTransfer(ctx, qtx, body)
+	resp, err := s.createTransfer(ctx, qtx, body, route)
 	if err != nil {
 		s.logger.Error("failed to create transfer", "error", err)
 		return createTransferResponse{}, err
@@ -159,20 +177,7 @@ func (s *Service) CreateTransfer(ctx context.Context, body createTransferRequest
 	return resp, nil
 }
 
-func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body createTransferRequest) (createTransferResponse, error) {
-	if body.SourceCountryID == body.DestinationCountryID {
-		return createTransferResponse{}, fmt.Errorf("%w: source and destination countries must be different", httpx.BadRequestError)
-	}
-
-	route, err := q.GetActiveRouteByCountries(ctx, db.GetActiveRouteByCountriesParams{
-		SourceCountryID:      body.SourceCountryID,
-		DestinationCountryID: body.DestinationCountryID,
-	})
-	if err != nil {
-		s.logger.Error("failed to get active route by countries", "error", err)
-		return createTransferResponse{}, common.TranslateDBError(err)
-	}
-
+func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body createTransferRequest, route db.GetActiveRouteByCountriesRow) (createTransferResponse, error) {
 	amtPaid, err := decimal.NewFromString(body.AmountSent)
 	if err != nil {
 		s.logger.Error("failed to convert amount sent to decimal", "error", err)
@@ -317,6 +322,27 @@ func receivingDetails(recipient *recipientDTO) (networkID, bankID pgtype.UUID, m
 	default:
 		return pgtype.UUID{}, pgtype.UUID{}, nil, nil, fmt.Errorf("%w: unsupported receiving method", httpx.BadRequestError)
 	}
+}
+
+func normalizeTransferPhones(body createTransferRequest) (createTransferRequest, error) {
+	senderPhone, err := common.NormalizePhone(body.SenderPhone)
+	if err != nil {
+		return body, err
+	}
+	body.SenderPhone = senderPhone
+
+	if body.Recipient != nil && body.Recipient.ReceivingMethod == db.ReceivingMethodsMOBILEMONEY {
+		if body.Recipient.RecipientPhone == nil || strings.TrimSpace(*body.Recipient.RecipientPhone) == "" {
+			return body, fmt.Errorf("%w: recipient phone is required", httpx.BadRequestError)
+		}
+		recipientPhone, err := common.NormalizePhone(*body.Recipient.RecipientPhone)
+		if err != nil {
+			return body, err
+		}
+		body.Recipient.RecipientPhone = &recipientPhone
+	}
+
+	return body, nil
 }
 
 func validatePaymentChannel(ctx context.Context, q *db.Queries, countryID int64, method db.ReceivingMethods, networkID, bankID pgtype.UUID) error {

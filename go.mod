@@ -17,10 +17,15 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/joho/godotenv v1.5.1
+	github.com/nyaruka/phonenumbers v1.8.1
 	github.com/oklog/ulid/v2 v2.1.2
 	github.com/pressly/goose/v3 v3.27.3
+	github.com/resend/resend-go/v3 v3.17.0
+	github.com/riverqueue/river v0.47.0
+	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.47.0
 	github.com/shopspring/decimal v1.4.0
 	golang.org/x/crypto v0.56.0
+	riverqueue.com/riverui v0.19.0
 )
 
 require (
@@ -50,14 +55,9 @@ require (
 	github.com/lestrrat-go/httprc/v3 v3.0.0-beta2 // indirect
 	github.com/lestrrat-go/jwx/v3 v3.0.2 // indirect
 	github.com/lestrrat-go/option v1.0.1 // indirect
-	github.com/lib/pq v1.12.3 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
-	github.com/resend/resend-go/v3 v3.17.0 // indirect
 	github.com/riverqueue/apiframe v0.0.0-20260901060805-2030400e7b64 // indirect
-	github.com/riverqueue/river v0.47.0 // indirect
 	github.com/riverqueue/river/riverdriver v0.47.0 // indirect
-	github.com/riverqueue/river/riverdriver/riverdatabasesql v0.47.0 // indirect
-	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.47.0 // indirect
 	github.com/riverqueue/river/rivershared v0.47.0 // indirect
 	github.com/riverqueue/river/rivertype v0.47.0 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
@@ -70,5 +70,5 @@ require (
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
-	riverqueue.com/riverui v0.19.0 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 )

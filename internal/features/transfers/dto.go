@@ -18,7 +18,7 @@ type createTransferRequest struct {
 
 	AmountSent string `json:"amount_sent" validate:"required,numeric"`
 
-	SenderPhone string `json:"sender_phone" validate:"required,e164"`
+	SenderPhone string `json:"sender_phone" validate:"required,min=5,max=20"`
 
 	Recipient *recipientDTO `json:"recipient" validate:"required"`
 
@@ -29,7 +29,7 @@ type createTransferRequest struct {
 
 type recipientDTO struct {
 	RecipientName  string  `json:"recipient_name" validate:"required,min=2,max=100"`
-	RecipientPhone *string `json:"recipient_phone,omitempty" validate:"omitempty,e164,required_if=ReceivingMethod MOBILE_MONEY"`
+	RecipientPhone *string `json:"recipient_phone,omitempty" validate:"omitempty,min=5,max=20,required_if=ReceivingMethod MOBILE_MONEY"`
 
 	ReceivingMethod db.ReceivingMethods `json:"receiving_method" validate:"required,oneof=BANK MOBILE_MONEY"`
 
