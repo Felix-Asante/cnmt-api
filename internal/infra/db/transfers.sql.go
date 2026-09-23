@@ -101,7 +101,7 @@ func (q *Queries) CreateTransfer(ctx context.Context, arg CreateTransferParams) 
 }
 
 const getAllTransfers = `-- name: GetAllTransfers :many
-SELECT t.id, t.reference, t.route_id, t.status, t.sender_phone, t.receiving_account_name, t.receiving_mobile_money_number, t.receiving_method, t.receiving_money_network_id, t.receiving_bank_id, t.receiving_bank_account, t.payment_proof_key, t.exchange_rate, t.fee, t.amount_sent, t.amount_received, t.notes, t.expires_at, t.created_at, t.updated_at, t.deleted_at, t.payment_account_id, t.payment_method, t.payment_account_name, t.payment_account_number, t.payment_channel_name, t.payment_currency_code,
+SELECT t.id, t.reference, t.route_id, t.status, t.sender_phone, t.receiving_account_name, t.receiving_mobile_money_number, t.receiving_method, t.receiving_money_network_id, t.receiving_bank_id, t.receiving_bank_account, t.payment_proof_key, t.exchange_rate, t.fee, t.amount_sent, t.amount_received, t.notes, t.expires_at, t.created_at, t.updated_at, t.deleted_at, t.payment_account_id, t.payment_method, t.payment_account_name, t.payment_account_number, t.payment_channel_name, t.payment_currency_code, t.payment_received_at, t.assurance_sent_at,
     src.id AS source_country_id,
     src.name AS source_country_name,
     src.flag AS source_flag,
@@ -179,6 +179,8 @@ type GetAllTransfersRow struct {
 	PaymentAccountNumber       *string
 	PaymentChannelName         *string
 	PaymentCurrencyCode        *string
+	PaymentReceivedAt          pgtype.Timestamptz
+	AssuranceSentAt            pgtype.Timestamptz
 	SourceCountryID            int64
 	SourceCountryName          string
 	SourceFlag                 string
@@ -238,6 +240,8 @@ func (q *Queries) GetAllTransfers(ctx context.Context, arg GetAllTransfersParams
 			&i.PaymentAccountNumber,
 			&i.PaymentChannelName,
 			&i.PaymentCurrencyCode,
+			&i.PaymentReceivedAt,
+			&i.AssuranceSentAt,
 			&i.SourceCountryID,
 			&i.SourceCountryName,
 			&i.SourceFlag,
@@ -303,7 +307,7 @@ func (q *Queries) GetAllTransfersCount(ctx context.Context, arg GetAllTransfersC
 }
 
 const getTransferByID = `-- name: GetTransferByID :one
-SELECT t.id, t.reference, t.route_id, t.status, t.sender_phone, t.receiving_account_name, t.receiving_mobile_money_number, t.receiving_method, t.receiving_money_network_id, t.receiving_bank_id, t.receiving_bank_account, t.payment_proof_key, t.exchange_rate, t.fee, t.amount_sent, t.amount_received, t.notes, t.expires_at, t.created_at, t.updated_at, t.deleted_at, t.payment_account_id, t.payment_method, t.payment_account_name, t.payment_account_number, t.payment_channel_name, t.payment_currency_code,
+SELECT t.id, t.reference, t.route_id, t.status, t.sender_phone, t.receiving_account_name, t.receiving_mobile_money_number, t.receiving_method, t.receiving_money_network_id, t.receiving_bank_id, t.receiving_bank_account, t.payment_proof_key, t.exchange_rate, t.fee, t.amount_sent, t.amount_received, t.notes, t.expires_at, t.created_at, t.updated_at, t.deleted_at, t.payment_account_id, t.payment_method, t.payment_account_name, t.payment_account_number, t.payment_channel_name, t.payment_currency_code, t.payment_received_at, t.assurance_sent_at,
     src.id AS source_country_id,
     src.name AS source_country_name,
     src.currency_code AS source_currency_code,
@@ -352,6 +356,8 @@ type GetTransferByIDRow struct {
 	PaymentAccountNumber       *string
 	PaymentChannelName         *string
 	PaymentCurrencyCode        *string
+	PaymentReceivedAt          pgtype.Timestamptz
+	AssuranceSentAt            pgtype.Timestamptz
 	SourceCountryID            int64
 	SourceCountryName          string
 	SourceCurrencyCode         string
@@ -395,6 +401,8 @@ func (q *Queries) GetTransferByID(ctx context.Context, id uuid.UUID) (GetTransfe
 		&i.PaymentAccountNumber,
 		&i.PaymentChannelName,
 		&i.PaymentCurrencyCode,
+		&i.PaymentReceivedAt,
+		&i.AssuranceSentAt,
 		&i.SourceCountryID,
 		&i.SourceCountryName,
 		&i.SourceCurrencyCode,
@@ -410,7 +418,7 @@ func (q *Queries) GetTransferByID(ctx context.Context, id uuid.UUID) (GetTransfe
 }
 
 const getTransferByReference = `-- name: GetTransferByReference :one
-SELECT t.id, t.reference, t.route_id, t.status, t.sender_phone, t.receiving_account_name, t.receiving_mobile_money_number, t.receiving_method, t.receiving_money_network_id, t.receiving_bank_id, t.receiving_bank_account, t.payment_proof_key, t.exchange_rate, t.fee, t.amount_sent, t.amount_received, t.notes, t.expires_at, t.created_at, t.updated_at, t.deleted_at, t.payment_account_id, t.payment_method, t.payment_account_name, t.payment_account_number, t.payment_channel_name, t.payment_currency_code,
+SELECT t.id, t.reference, t.route_id, t.status, t.sender_phone, t.receiving_account_name, t.receiving_mobile_money_number, t.receiving_method, t.receiving_money_network_id, t.receiving_bank_id, t.receiving_bank_account, t.payment_proof_key, t.exchange_rate, t.fee, t.amount_sent, t.amount_received, t.notes, t.expires_at, t.created_at, t.updated_at, t.deleted_at, t.payment_account_id, t.payment_method, t.payment_account_name, t.payment_account_number, t.payment_channel_name, t.payment_currency_code, t.payment_received_at, t.assurance_sent_at,
     src.id AS source_country_id,
     src.name AS source_country_name,
     src.currency_code AS source_currency_code,
@@ -463,6 +471,8 @@ type GetTransferByReferenceRow struct {
 	PaymentAccountNumber       *string
 	PaymentChannelName         *string
 	PaymentCurrencyCode        *string
+	PaymentReceivedAt          pgtype.Timestamptz
+	AssuranceSentAt            pgtype.Timestamptz
 	SourceCountryID            int64
 	SourceCountryName          string
 	SourceCurrencyCode         string
@@ -508,6 +518,8 @@ func (q *Queries) GetTransferByReference(ctx context.Context, reference string) 
 		&i.PaymentAccountNumber,
 		&i.PaymentChannelName,
 		&i.PaymentCurrencyCode,
+		&i.PaymentReceivedAt,
+		&i.AssuranceSentAt,
 		&i.SourceCountryID,
 		&i.SourceCountryName,
 		&i.SourceCurrencyCode,
@@ -524,6 +536,91 @@ func (q *Queries) GetTransferByReference(ctx context.Context, reference string) 
 	return i, err
 }
 
+const listTransfersNeedingAssurance = `-- name: ListTransfersNeedingAssurance :many
+SELECT id,
+    reference,
+    sender_phone,
+    status,
+    amount_sent,
+    amount_received,
+    payment_received_at,
+    created_at
+FROM transfers
+WHERE deleted_at IS NULL
+    AND assurance_sent_at IS NULL
+    AND status IN (
+        'PAYMENT_RECEIVED',
+        'VERIFYING',
+        'PROCESSING'
+    )
+    AND payment_received_at IS NOT NULL
+    AND payment_received_at <= $1::timestamptz
+ORDER BY payment_received_at ASC
+LIMIT $2
+`
+
+type ListTransfersNeedingAssuranceParams struct {
+	OlderThan time.Time
+	RowLimit  int32
+}
+
+type ListTransfersNeedingAssuranceRow struct {
+	ID                uuid.UUID
+	Reference         string
+	SenderPhone       string
+	Status            TransferStatus
+	AmountSent        pgtype.Numeric
+	AmountReceived    pgtype.Numeric
+	PaymentReceivedAt pgtype.Timestamptz
+	CreatedAt         time.Time
+}
+
+func (q *Queries) ListTransfersNeedingAssurance(ctx context.Context, arg ListTransfersNeedingAssuranceParams) ([]ListTransfersNeedingAssuranceRow, error) {
+	rows, err := q.db.Query(ctx, listTransfersNeedingAssurance, arg.OlderThan, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTransfersNeedingAssuranceRow{}
+	for rows.Next() {
+		var i ListTransfersNeedingAssuranceRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Reference,
+			&i.SenderPhone,
+			&i.Status,
+			&i.AmountSent,
+			&i.AmountReceived,
+			&i.PaymentReceivedAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markTransferAssuranceSent = `-- name: MarkTransferAssuranceSent :execrows
+UPDATE transfers
+SET assurance_sent_at = now(),
+    updated_at = now()
+WHERE id = $1
+    AND assurance_sent_at IS NULL
+    AND deleted_at IS NULL
+`
+
+func (q *Queries) MarkTransferAssuranceSent(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, markTransferAssuranceSent, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setPaymentProofKey = `-- name: SetPaymentProofKey :exec
 UPDATE transfers
 SET payment_proof_key = $1,
@@ -534,6 +631,7 @@ SET payment_proof_key = $1,
     payment_channel_name = $6,
     payment_currency_code = $7,
     status = 'PAYMENT_RECEIVED',
+    payment_received_at = now(),
     updated_at = now()
 WHERE reference = $8
     AND status = 'PENDING_PAYMENT'

@@ -92,6 +92,7 @@ SET payment_proof_key = $1,
     payment_channel_name = $6,
     payment_currency_code = $7,
     status = 'PAYMENT_RECEIVED',
+    payment_received_at = now(),
     updated_at = now()
 WHERE reference = $8
     AND status = 'PENDING_PAYMENT'
@@ -153,3 +154,31 @@ WHERE t.deleted_at IS NULL
         ),
         t.route_id
     );
+-- name: ListTransfersNeedingAssurance :many
+SELECT id,
+    reference,
+    sender_phone,
+    status,
+    amount_sent,
+    amount_received,
+    payment_received_at,
+    created_at
+FROM transfers
+WHERE deleted_at IS NULL
+    AND assurance_sent_at IS NULL
+    AND status IN (
+        'PAYMENT_RECEIVED',
+        'VERIFYING',
+        'PROCESSING'
+    )
+    AND payment_received_at IS NOT NULL
+    AND payment_received_at <= sqlc.arg(older_than)::timestamptz
+ORDER BY payment_received_at ASC
+LIMIT sqlc.arg(row_limit);
+-- name: MarkTransferAssuranceSent :execrows
+UPDATE transfers
+SET assurance_sent_at = now(),
+    updated_at = now()
+WHERE id = $1
+    AND assurance_sent_at IS NULL
+    AND deleted_at IS NULL;

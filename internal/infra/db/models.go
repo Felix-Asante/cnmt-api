@@ -307,6 +307,8 @@ type Transfer struct {
 	PaymentAccountNumber       *string
 	PaymentChannelName         *string
 	PaymentCurrencyCode        *string
+	PaymentReceivedAt          pgtype.Timestamptz
+	AssuranceSentAt            pgtype.Timestamptz
 }
 
 type TransferEvent struct {
