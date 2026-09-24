@@ -71,7 +71,7 @@ func (app *AppConfig) Run() (*App, error) {
 		return nil, fmt.Errorf("failed to initialize notifications: %w", err)
 	}
 
-	workerFct := workers.NewWorkers(app.dbConn, notifier)
+	workerFct := workers.NewWorkers(app.dbConn, notifier, logger)
 	workerClient, workerErr := workerFct.Init()
 
 	if workerErr != nil {
