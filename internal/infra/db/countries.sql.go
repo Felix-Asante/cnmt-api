@@ -63,19 +63,25 @@ func (q *Queries) CreateCountry(ctx context.Context, arg CreateCountryParams) (C
 }
 
 const createPaymentChannel = `-- name: CreatePaymentChannel :one
-INSERT INTO payment_channels (name, channel_type, country_id)
-VALUES ($1, $2, $3)
-RETURNING id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at
+INSERT INTO payment_channels (name, channel_type, country_id, extra_fee)
+VALUES ($1, $2, $3, $4)
+RETURNING id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at, extra_fee
 `
 
 type CreatePaymentChannelParams struct {
 	Name        string
 	ChannelType ReceivingMethods
 	CountryID   int64
+	ExtraFee    pgtype.Numeric
 }
 
 func (q *Queries) CreatePaymentChannel(ctx context.Context, arg CreatePaymentChannelParams) (PaymentChannel, error) {
-	row := q.db.QueryRow(ctx, createPaymentChannel, arg.Name, arg.ChannelType, arg.CountryID)
+	row := q.db.QueryRow(ctx, createPaymentChannel,
+		arg.Name,
+		arg.ChannelType,
+		arg.CountryID,
+		arg.ExtraFee,
+	)
 	var i PaymentChannel
 	err := row.Scan(
 		&i.ID,
@@ -86,6 +92,7 @@ func (q *Queries) CreatePaymentChannel(ctx context.Context, arg CreatePaymentCha
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.ExtraFee,
 	)
 	return i, err
 }
@@ -179,7 +186,7 @@ SET deleted_at = now(),
     updated_at = now()
 WHERE id = $1
     AND deleted_at IS NULL
-RETURNING id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at
+RETURNING id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at, extra_fee
 `
 
 func (q *Queries) DeletePaymentChannel(ctx context.Context, id uuid.UUID) (PaymentChannel, error) {
@@ -194,6 +201,7 @@ func (q *Queries) DeletePaymentChannel(ctx context.Context, id uuid.UUID) (Payme
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.ExtraFee,
 	)
 	return i, err
 }
@@ -253,7 +261,7 @@ func (q *Queries) DoesPaymentChannelExist(ctx context.Context, arg DoesPaymentCh
 }
 
 const getActivePCByCountryTypeAndID = `-- name: GetActivePCByCountryTypeAndID :one
-SELECT pc.id, pc.name, pc.channel_type, pc.is_active, pc.country_id, pc.created_at, pc.updated_at, pc.deleted_at
+SELECT pc.id, pc.name, pc.channel_type, pc.is_active, pc.country_id, pc.created_at, pc.updated_at, pc.deleted_at, pc.extra_fee
 FROM payment_channels pc
     JOIN countries c ON c.id = pc.country_id
 WHERE pc.country_id = $1
@@ -283,6 +291,7 @@ func (q *Queries) GetActivePCByCountryTypeAndID(ctx context.Context, arg GetActi
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.ExtraFee,
 	)
 	return i, err
 }
@@ -291,7 +300,8 @@ const getActivePaymentChannelsByCountryIDs = `-- name: GetActivePaymentChannelsB
 SELECT id,
     name,
     channel_type,
-    country_id
+    country_id,
+    extra_fee
 FROM payment_channels
 WHERE country_id = ANY($1::bigint [])
     AND is_active = TRUE
@@ -305,6 +315,7 @@ type GetActivePaymentChannelsByCountryIDsRow struct {
 	Name        string
 	ChannelType ReceivingMethods
 	CountryID   int64
+	ExtraFee    pgtype.Numeric
 }
 
 func (q *Queries) GetActivePaymentChannelsByCountryIDs(ctx context.Context, dollar_1 []int64) ([]GetActivePaymentChannelsByCountryIDsRow, error) {
@@ -321,6 +332,7 @@ func (q *Queries) GetActivePaymentChannelsByCountryIDs(ctx context.Context, doll
 			&i.Name,
 			&i.ChannelType,
 			&i.CountryID,
+			&i.ExtraFee,
 		); err != nil {
 			return nil, err
 		}
@@ -732,7 +744,7 @@ func (q *Queries) GetDestCountriesBySrcCountryID(ctx context.Context, sourceCoun
 }
 
 const getPaymentChannelByCountryID = `-- name: GetPaymentChannelByCountryID :one
-SELECT id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at
+SELECT id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at, extra_fee
 FROM payment_channels
 WHERE country_id = $1
 `
@@ -749,12 +761,13 @@ func (q *Queries) GetPaymentChannelByCountryID(ctx context.Context, countryID in
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.ExtraFee,
 	)
 	return i, err
 }
 
 const getPaymentChannelByID = `-- name: GetPaymentChannelByID :one
-SELECT id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at
+SELECT id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at, extra_fee
 FROM payment_channels
 WHERE id = $1
 `
@@ -771,12 +784,13 @@ func (q *Queries) GetPaymentChannelByID(ctx context.Context, id uuid.UUID) (Paym
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.ExtraFee,
 	)
 	return i, err
 }
 
 const getPaymentChannelsByCountryID = `-- name: GetPaymentChannelsByCountryID :many
-SELECT id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at
+SELECT id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at, extra_fee
 FROM payment_channels
 WHERE country_id = $1
     AND deleted_at IS NULL
@@ -802,6 +816,7 @@ func (q *Queries) GetPaymentChannelsByCountryID(ctx context.Context, countryID i
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.ExtraFee,
 		); err != nil {
 			return nil, err
 		}
@@ -948,20 +963,27 @@ const updatePaymentChannel = `-- name: UpdatePaymentChannel :one
 UPDATE payment_channels
 SET name = $2,
     channel_type = $3,
+    extra_fee = $4,
     updated_at = now()
 WHERE id = $1
     AND deleted_at IS NULL
-RETURNING id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at
+RETURNING id, name, channel_type, is_active, country_id, created_at, updated_at, deleted_at, extra_fee
 `
 
 type UpdatePaymentChannelParams struct {
 	ID          uuid.UUID
 	Name        string
 	ChannelType ReceivingMethods
+	ExtraFee    pgtype.Numeric
 }
 
 func (q *Queries) UpdatePaymentChannel(ctx context.Context, arg UpdatePaymentChannelParams) (PaymentChannel, error) {
-	row := q.db.QueryRow(ctx, updatePaymentChannel, arg.ID, arg.Name, arg.ChannelType)
+	row := q.db.QueryRow(ctx, updatePaymentChannel,
+		arg.ID,
+		arg.Name,
+		arg.ChannelType,
+		arg.ExtraFee,
+	)
 	var i PaymentChannel
 	err := row.Scan(
 		&i.ID,
@@ -972,6 +994,7 @@ func (q *Queries) UpdatePaymentChannel(ctx context.Context, arg UpdatePaymentCha
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.ExtraFee,
 	)
 	return i, err
 }

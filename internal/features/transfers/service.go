@@ -212,20 +212,24 @@ func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body create
 		appliedPromo = &promo
 	}
 
-	amtToReceive := common.RoundMoney(amtPaid.Mul(rate).Sub(calculatedFee))
-	if !amtToReceive.IsPositive() {
-		return createTransferResponse{}, fmt.Errorf("%w: amount received must be greater than zero after fees", httpx.BadRequestError)
-	}
-
 	networkID, bankID, mobileNumber, bankAccount, err := receivingDetails(body.Recipient)
 	if err != nil {
 		s.logger.Error("failed to get receiving details", "error", err)
 		return createTransferResponse{}, err
 	}
 
-	if err := validatePaymentChannel(ctx, q, body.DestinationCountryID, body.Recipient.ReceivingMethod, networkID, bankID); err != nil {
+	channel, err := validatePaymentChannel(ctx, q, body.DestinationCountryID, body.Recipient.ReceivingMethod, networkID, bankID)
+	if err != nil {
 		s.logger.Error("failed to validate payment channel", "error", err)
 		return createTransferResponse{}, err
+	}
+
+	extraFee := optionalChannelExtraFee(channel.ExtraFee)
+	calculatedFee = common.RoundMoney(calculatedFee.Add(extraFee))
+
+	amtToReceive := common.RoundMoney(amtPaid.Mul(rate).Sub(calculatedFee))
+	if !amtToReceive.IsPositive() {
+		return createTransferResponse{}, fmt.Errorf("%w: amount received must be greater than zero after fees", httpx.BadRequestError)
 	}
 
 	feeNumeric, err := common.DecimalToPgNumeric(calculatedFee)
@@ -345,21 +349,21 @@ func normalizeTransferPhones(body createTransferRequest) (createTransferRequest,
 	return body, nil
 }
 
-func validatePaymentChannel(ctx context.Context, q *db.Queries, countryID int64, method db.ReceivingMethods, networkID, bankID pgtype.UUID) error {
+func validatePaymentChannel(ctx context.Context, q *db.Queries, countryID int64, method db.ReceivingMethods, networkID, bankID pgtype.UUID) (db.PaymentChannel, error) {
 	var channelID uuid.UUID
 	switch method {
 	case db.ReceivingMethodsBANK:
 		if !bankID.Valid {
-			return fmt.Errorf("%w: bank not found", httpx.BadRequestError)
+			return db.PaymentChannel{}, fmt.Errorf("%w: bank not found", httpx.BadRequestError)
 		}
 		channelID = bankID.Bytes
 	case db.ReceivingMethodsMOBILEMONEY:
 		if !networkID.Valid {
-			return fmt.Errorf("%w: mobile money network not found", httpx.BadRequestError)
+			return db.PaymentChannel{}, fmt.Errorf("%w: mobile money network not found", httpx.BadRequestError)
 		}
 		channelID = networkID.Bytes
 	default:
-		return fmt.Errorf("%w: unsupported receiving method", httpx.BadRequestError)
+		return db.PaymentChannel{}, fmt.Errorf("%w: unsupported receiving method", httpx.BadRequestError)
 	}
 
 	pch, err := q.GetActivePCByCountryTypeAndID(ctx, db.GetActivePCByCountryTypeAndIDParams{
@@ -368,12 +372,23 @@ func validatePaymentChannel(ctx context.Context, q *db.Queries, countryID int64,
 		ID:          channelID,
 	})
 	if err != nil {
-		return common.TranslateDBError(err)
+		return db.PaymentChannel{}, common.TranslateDBError(err)
 	}
 	if pch.ID == uuid.Nil {
-		return fmt.Errorf("%w: payment channel not found", httpx.NotFoundError)
+		return db.PaymentChannel{}, fmt.Errorf("%w: payment channel not found", httpx.NotFoundError)
 	}
-	return nil
+	return pch, nil
+}
+
+func optionalChannelExtraFee(n pgtype.Numeric) decimal.Decimal {
+	if !n.Valid {
+		return decimal.Zero
+	}
+	d, err := common.PgNumericToDecimal(n)
+	if err != nil {
+		return decimal.Zero
+	}
+	return d
 }
 
 func validateAmountPaid(amountPaid decimal.Decimal, minTransferAmount, maxTransferAmount pgtype.Numeric) error {

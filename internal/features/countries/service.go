@@ -112,7 +112,11 @@ func (s *Service) CreateCountry(ctx context.Context, req CreateCountryRequest) (
 		return CountryResponse{}, common.TranslateDBError(err)
 	}
 	for _, channel := range req.PaymentChannels {
-		_, err = qtx.CreatePaymentChannel(ctx, channel.toCreateParams(country.ID))
+		params, err := channel.toCreateParams(country.ID)
+		if err != nil {
+			return CountryResponse{}, err
+		}
+		_, err = qtx.CreatePaymentChannel(ctx, params)
 		if err != nil {
 			return CountryResponse{}, common.TranslateDBError(err)
 		}
@@ -149,7 +153,11 @@ func (s *Service) CreatePaymentChannel(
 		return PaymentChannelResponse{}, common.TranslateDBError(err)
 	}
 
-	channel, err := s.queries.CreatePaymentChannel(ctx, req.toCreateParams(countryID))
+	params, err := req.toCreateParams(countryID)
+	if err != nil {
+		return PaymentChannelResponse{}, err
+	}
+	channel, err := s.queries.CreatePaymentChannel(ctx, params)
 	if err != nil {
 		return PaymentChannelResponse{}, common.TranslateDBError(err)
 	}
@@ -157,7 +165,11 @@ func (s *Service) CreatePaymentChannel(
 }
 
 func (s *Service) UpdatePaymentChannel(ctx context.Context, id uuid.UUID, req UpdatePaymentChannelRequest) (PaymentChannelResponse, error) {
-	channel, err := s.queries.UpdatePaymentChannel(ctx, req.toUpdateParams(id))
+	params, err := req.toUpdateParams(id)
+	if err != nil {
+		return PaymentChannelResponse{}, err
+	}
+	channel, err := s.queries.UpdatePaymentChannel(ctx, params)
 	if err != nil {
 		return PaymentChannelResponse{}, common.TranslateDBError(err)
 	}

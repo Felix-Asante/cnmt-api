@@ -1,10 +1,12 @@
 package countries
 
 import (
+	"fmt"
 	"time"
 
 	"cnmt/internal/common"
 	"cnmt/internal/infra/db"
+	"cnmt/internal/common/httpx"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -30,8 +32,9 @@ type CountryDetailResponse struct {
 }
 
 type PaymentChannelDTO struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
+	ID       uuid.UUID       `json:"id"`
+	Name     string          `json:"name"`
+	ExtraFee decimal.Decimal `json:"extra_fee"`
 }
 
 type SourceCountryDTO struct {
@@ -76,6 +79,7 @@ type countryAttrs struct {
 type paymentChannelAttrs struct {
 	Name        string              `json:"name" validate:"required,min=3,max=255"`
 	ChannelType db.ReceivingMethods `json:"channel_type" validate:"required,oneof=BANK MOBILE_MONEY"`
+	ExtraFee    *decimal.Decimal    `json:"extra_fee,omitempty"`
 }
 
 type CreatePaymentChannelRequest struct {
@@ -101,6 +105,7 @@ type PaymentChannelResponse struct {
 	ChannelType db.ReceivingMethods `json:"channel_type"`
 	CountryID   int64               `json:"country_id"`
 	IsActive    bool                `json:"is_active"`
+	ExtraFee    decimal.Decimal     `json:"extra_fee"`
 	CreatedAt   time.Time           `json:"created_at"`
 	UpdatedAt   time.Time           `json:"updated_at"`
 }
@@ -167,6 +172,7 @@ func mapPaymentChannelToResponse(ch db.PaymentChannel) PaymentChannelResponse {
 		ChannelType: ch.ChannelType,
 		CountryID:   ch.CountryID,
 		IsActive:    ch.IsActive,
+		ExtraFee:    optionalNumericToDecimal(ch.ExtraFee),
 		CreatedAt:   ch.CreatedAt,
 		UpdatedAt:   ch.UpdatedAt,
 	}
@@ -195,20 +201,51 @@ func (a countryAttrs) toUpdateParams(id int64) db.UpdateCountryParams {
 	}
 }
 
-func (a paymentChannelAttrs) toCreateParams(countryID int64) db.CreatePaymentChannelParams {
+func (a paymentChannelAttrs) toCreateParams(countryID int64) (db.CreatePaymentChannelParams, error) {
+	extraFee, err := optionalDecimalToNumeric(a.ExtraFee)
+	if err != nil {
+		return db.CreatePaymentChannelParams{}, err
+	}
 	return db.CreatePaymentChannelParams{
 		Name:        a.Name,
 		ChannelType: a.ChannelType,
 		CountryID:   countryID,
-	}
+		ExtraFee:    extraFee,
+	}, nil
 }
 
-func (a paymentChannelAttrs) toUpdateParams(id uuid.UUID) db.UpdatePaymentChannelParams {
+func (a paymentChannelAttrs) toUpdateParams(id uuid.UUID) (db.UpdatePaymentChannelParams, error) {
+	extraFee, err := optionalDecimalToNumeric(a.ExtraFee)
+	if err != nil {
+		return db.UpdatePaymentChannelParams{}, err
+	}
 	return db.UpdatePaymentChannelParams{
 		ID:          id,
 		Name:        a.Name,
 		ChannelType: a.ChannelType,
+		ExtraFee:    extraFee,
+	}, nil
+}
+
+func optionalDecimalToNumeric(d *decimal.Decimal) (pgtype.Numeric, error) {
+	if d == nil {
+		return pgtype.Numeric{}, nil
 	}
+	if d.IsNegative() {
+		return pgtype.Numeric{}, fmt.Errorf("%w: extra_fee cannot be negative", httpx.BadRequestError)
+	}
+	return common.DecimalToPgNumeric(*d)
+}
+
+func optionalNumericToDecimal(n pgtype.Numeric) decimal.Decimal {
+	if !n.Valid {
+		return decimal.Zero
+	}
+	d, err := common.PgNumericToDecimal(n)
+	if err != nil {
+		return decimal.Zero
+	}
+	return d
 }
 
 func MapSourceCountries(
@@ -384,7 +421,11 @@ func groupPaymentChannels(channels []db.GetActivePaymentChannelsByCountryIDsRow)
 	banks = make([]PaymentChannelDTO, 0)
 	networks = make([]PaymentChannelDTO, 0)
 	for _, ch := range channels {
-		dto := PaymentChannelDTO{ID: ch.ID, Name: ch.Name}
+		dto := PaymentChannelDTO{
+			ID:       ch.ID,
+			Name:     ch.Name,
+			ExtraFee: optionalNumericToDecimal(ch.ExtraFee),
+		}
 		switch ch.ChannelType {
 		case db.ReceivingMethodsBANK:
 			banks = append(banks, dto)

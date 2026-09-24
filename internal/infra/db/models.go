@@ -239,6 +239,7 @@ type PaymentChannel struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   pgtype.Timestamptz
+	ExtraFee    pgtype.Numeric
 }
 
 type PromoCode struct {

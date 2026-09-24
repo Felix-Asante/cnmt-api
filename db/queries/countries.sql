@@ -62,13 +62,14 @@ WHERE country_id = $1
 ORDER BY channel_type,
     name;
 -- name: CreatePaymentChannel :one
-INSERT INTO payment_channels (name, channel_type, country_id)
-VALUES ($1, $2, $3)
+INSERT INTO payment_channels (name, channel_type, country_id, extra_fee)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 -- name: UpdatePaymentChannel :one
 UPDATE payment_channels
 SET name = $2,
     channel_type = $3,
+    extra_fee = $4,
     updated_at = now()
 WHERE id = $1
     AND deleted_at IS NULL
@@ -164,7 +165,8 @@ ORDER BY r.source_country_id,
 SELECT id,
     name,
     channel_type,
-    country_id
+    country_id,
+    extra_fee
 FROM payment_channels
 WHERE country_id = ANY($1::bigint [])
     AND is_active = TRUE
