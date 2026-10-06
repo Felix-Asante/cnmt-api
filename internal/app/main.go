@@ -177,4 +177,6 @@ func whatsappCbHandler(w http.ResponseWriter, r *http.Request) {
 	
 
 	fmt.Fprintf(w, "%s %s", token, r.URL.Query().Get("hub.challenge"))
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(r.URL.Query().Get("hub.challenge")))
 }
