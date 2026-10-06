@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"time"
 
@@ -147,8 +146,10 @@ func initRoutes(r *chi.Mux, config RoutesConfig) {
 	promoCodeCtrl := promocodes.NewController(promoCodeSvc)
 
 	r.Route("/api/v1", func(r chi.Router) {
-	// Whatsapp webhook verification endpoint: refactor later to use a proper controller
-		r.Get("/whatsapp/cb", whatsappCbHandler)
+		// Meta WhatsApp webhook (same URL for verify GET + event POST)
+		r.Get("/whatsapp/cb", whatsappVerifyHandler)
+		r.Post("/whatsapp/cb", whatsappWebhookHandler)
+
 		transferCtrl.Routes(r)
 		countryCtrl.Routes(r)
 		paymentAccountCtrl.Routes(r)
@@ -169,14 +170,4 @@ func initRoutes(r *chi.Mux, config RoutesConfig) {
 			})
 		})
 	})
-}
-
-func whatsappCbHandler(w http.ResponseWriter, r *http.Request) {
-	
-	token := r.URL.Query().Get("hub.verify_token")
-	
-
-	fmt.Fprintf(w, "%s %s", token, r.URL.Query().Get("hub.challenge"))
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(r.URL.Query().Get("hub.challenge")))
 }
