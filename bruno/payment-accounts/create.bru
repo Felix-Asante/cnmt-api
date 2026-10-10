@@ -1,0 +1,37 @@
+meta {
+  name: Create payment account
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/payment-accounts
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "country_id": {{countryId}},
+    "payment_method": "BANK",
+    "name": "Ops GCB",
+    "account_name": "CN Connect Ltd",
+    "account_number": "1234567890",
+    "payment_channel_id": "{{paymentChannelId}}",
+    "currency_code": "GHS"
+  }
+}
+
+script:post-response {
+  if (res.body && res.body.id) {
+    bru.setEnvVar("paymentAccountId", res.body.id);
+  }
+}
+
+docs {
+POST /api/v1/admin/payment-accounts
+}

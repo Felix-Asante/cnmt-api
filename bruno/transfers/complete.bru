@@ -1,0 +1,15 @@
+meta {
+  name: Complete transfer
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/transfers/{{transferId}}/complete
+  body: none
+  auth: inherit
+}
+
+docs {
+POST /api/v1/admin/transfers/{id}/complete
+}

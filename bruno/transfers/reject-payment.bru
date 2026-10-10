@@ -1,0 +1,25 @@
+meta {
+  name: Reject payment
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/transfers/{{transferId}}/reject-payment
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "reason": "Payment proof unclear"
+  }
+}
+
+docs {
+POST /api/v1/admin/transfers/{id}/reject-payment
+}

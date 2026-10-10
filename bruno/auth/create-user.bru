@@ -1,0 +1,28 @@
+meta {
+  name: Create user
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/users
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Bootstrap-Secret: {{bootstrapSecret}}
+}
+
+body:json {
+  {
+    "email": "{{adminEmail}}",
+    "password": "{{adminPassword}}",
+    "role": "admin"
+  }
+}
+
+docs {
+POST /api/v1/auth/users
+}

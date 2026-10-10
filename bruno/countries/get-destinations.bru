@@ -1,0 +1,15 @@
+meta {
+  name: Get destinations
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/countries/{{sourceCountryId}}/destinations
+  body: none
+  auth: none
+}
+
+docs {
+GET /api/v1/countries/{countryID}/destinations
+}

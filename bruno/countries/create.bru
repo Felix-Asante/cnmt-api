@@ -1,0 +1,47 @@
+meta {
+  name: Create country
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/countries
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Ghana",
+    "iso_code": "GH",
+    "flag": "GH",
+    "currency_name": "Ghanaian Cedi",
+    "currency_code": "GHS",
+    "currency_symbol": "GHS",
+    "payment_channels": [
+      {
+        "name": "MTN MoMo",
+        "channel_type": "MOBILE_MONEY"
+      },
+      {
+        "name": "GCB Bank",
+        "channel_type": "BANK",
+        "extra_fee": "0"
+      }
+    ]
+  }
+}
+
+script:post-response {
+  if (res.body && res.body.id) {
+    bru.setEnvVar("countryId", String(res.body.id));
+  }
+}
+
+docs {
+POST /api/v1/admin/countries
+}

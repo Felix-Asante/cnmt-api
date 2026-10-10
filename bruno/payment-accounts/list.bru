@@ -1,0 +1,22 @@
+meta {
+  name: List payment accounts
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/payment-accounts
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~country_id: {{countryId}}
+  ~payment_method: BANK
+  ~is_active: true
+  ~currency_code: GHS
+}
+
+docs {
+GET /api/v1/admin/payment-accounts
+}

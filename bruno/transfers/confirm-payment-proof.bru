@@ -1,0 +1,27 @@
+meta {
+  name: Confirm payment proof
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/transfers/payment-proof/confirm
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "reference": "{{transferReference}}",
+    "key": "{{paymentProofKey}}",
+    "payment_account_id": "{{paymentAccountId}}"
+  }
+}
+
+docs {
+PATCH /api/v1/transfers/payment-proof/confirm
+}

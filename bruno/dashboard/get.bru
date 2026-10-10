@@ -1,0 +1,20 @@
+meta {
+  name: Get dashboard
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/dashboard
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~from: 2026-01-01
+  ~to: 2026-12-31
+}
+
+docs {
+GET /api/v1/admin/dashboard
+}

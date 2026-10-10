@@ -1,0 +1,15 @@
+meta {
+  name: Process transfer
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/transfers/{{transferId}}/process
+  body: none
+  auth: inherit
+}
+
+docs {
+POST /api/v1/admin/transfers/{id}/process
+}

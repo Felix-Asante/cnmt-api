@@ -1,0 +1,37 @@
+meta {
+  name: Create route
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/routes
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "source_country_id": {{sourceCountryId}},
+    "dest_country_id": {{destCountryId}},
+    "exchange_rate": "1.50",
+    "fee_type": "fixed",
+    "fee": "10.00",
+    "min_transfer_amount": "50.00",
+    "max_transfer_amount": "10000.00"
+  }
+}
+
+script:post-response {
+  if (res.body && res.body.id) {
+    bru.setEnvVar("routeId", res.body.id);
+  }
+}
+
+docs {
+POST /api/v1/admin/routes
+}

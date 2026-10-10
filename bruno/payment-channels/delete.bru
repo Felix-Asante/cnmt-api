@@ -1,0 +1,15 @@
+meta {
+  name: Delete payment channel
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/admin/payment-channels/{{paymentChannelId}}
+  body: none
+  auth: inherit
+}
+
+docs {
+DELETE /api/v1/admin/payment-channels/{id}
+}

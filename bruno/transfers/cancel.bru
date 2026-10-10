@@ -1,0 +1,25 @@
+meta {
+  name: Cancel transfer
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/transfers/{{transferId}}/cancel
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "reason": "Customer requested cancellation"
+  }
+}
+
+docs {
+POST /api/v1/admin/transfers/{id}/cancel
+}

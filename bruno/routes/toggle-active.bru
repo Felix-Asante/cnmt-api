@@ -1,0 +1,15 @@
+meta {
+  name: Toggle route active
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/routes/{{routeId}}/toggle-active
+  body: none
+  auth: inherit
+}
+
+docs {
+POST /api/v1/admin/routes/{id}/toggle-active
+}

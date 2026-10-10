@@ -1,0 +1,30 @@
+meta {
+  name: Update country
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/admin/countries/{{countryId}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Ghana",
+    "iso_code": "GH",
+    "flag": "GH",
+    "currency_name": "Ghanaian Cedi",
+    "currency_code": "GHS",
+    "currency_symbol": "GHS"
+  }
+}
+
+docs {
+PATCH /api/v1/admin/countries/{id}
+}

@@ -1,0 +1,19 @@
+meta {
+  name: CNMT API
+}
+
+auth {
+  mode: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+docs {
+  # CNMT API
+  Open folder `bruno` in Bruno.
+  1. Select environment `local`
+  2. Run Auth > Login (saves accessToken)
+  3. Admin requests inherit bearer auth from collection
+}

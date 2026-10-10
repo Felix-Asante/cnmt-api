@@ -1,0 +1,15 @@
+meta {
+  name: List promo codes
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/promocodes
+  body: none
+  auth: inherit
+}
+
+docs {
+GET /api/v1/admin/promocodes
+}

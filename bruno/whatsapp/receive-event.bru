@@ -1,0 +1,57 @@
+meta {
+  name: Receive webhook event
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/whatsapp/cb
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+        "changes": [
+          {
+            "field": "messages",
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "15550001111",
+                "phone_number_id": "PHONE_NUMBER_ID"
+              },
+              "contacts": [
+                {
+                  "profile": { "name": "Test User" },
+                  "wa_id": "15557770000"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "15557770000",
+                  "id": "wamid.TEST_MESSAGE_ID",
+                  "timestamp": "1710000000",
+                  "type": "text",
+                  "text": { "body": "hello" }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+
+docs {
+POST /api/v1/whatsapp/cb
+}

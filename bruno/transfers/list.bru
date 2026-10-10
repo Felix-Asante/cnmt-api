@@ -1,0 +1,24 @@
+meta {
+  name: List transfers
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/transfers
+  body: none
+  auth: inherit
+}
+
+params:query {
+  page: 1
+  limit: 20
+  ~status: PENDING_PAYMENT
+  ~reference: {{transferReference}}
+  ~sender_phone: +233241234567
+  ~route_id: {{routeId}}
+}
+
+docs {
+GET /api/v1/admin/transfers
+}

@@ -1,0 +1,27 @@
+meta {
+  name: Update payment channel
+  type: http
+  seq: 2
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/admin/payment-channels/{{paymentChannelId}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Attijariwafa Bank",
+    "channel_type": "BANK",
+    "extra_fee": "15"
+  }
+}
+
+docs {
+PATCH /api/v1/admin/payment-channels/{id}
+}

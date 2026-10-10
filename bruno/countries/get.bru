@@ -1,0 +1,15 @@
+meta {
+  name: Get country
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/countries/{{countryId}}
+  body: none
+  auth: inherit
+}
+
+docs {
+GET /api/v1/admin/countries/{id}
+}

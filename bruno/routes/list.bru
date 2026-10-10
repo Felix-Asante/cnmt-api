@@ -1,0 +1,21 @@
+meta {
+  name: List routes
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/routes
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~source_country_id: {{sourceCountryId}}
+  ~dest_country_id: {{destCountryId}}
+  ~is_active: true
+}
+
+docs {
+GET /api/v1/admin/routes
+}

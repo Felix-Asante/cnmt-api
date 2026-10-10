@@ -1,0 +1,21 @@
+meta {
+  name: Verify webhook
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/whatsapp/cb
+  body: none
+  auth: none
+}
+
+params:query {
+  hub.mode: subscribe
+  hub.verify_token: {{whatsappVerifyToken}}
+  hub.challenge: 1158201444
+}
+
+docs {
+GET /api/v1/whatsapp/cb
+}

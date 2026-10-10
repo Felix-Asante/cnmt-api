@@ -1,0 +1,15 @@
+meta {
+  name: Deactivate payment account
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/payment-accounts/{{paymentAccountId}}/deactivate
+  body: none
+  auth: inherit
+}
+
+docs {
+POST /api/v1/admin/payment-accounts/{id}/deactivate
+}

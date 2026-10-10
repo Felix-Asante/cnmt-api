@@ -1,0 +1,15 @@
+meta {
+  name: Get transfer by reference
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/transfers/{{transferReference}}
+  body: none
+  auth: none
+}
+
+docs {
+GET /api/v1/transfers/{reference}
+}

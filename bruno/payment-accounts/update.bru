@@ -1,0 +1,29 @@
+meta {
+  name: Update payment account
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/admin/payment-accounts/{{paymentAccountId}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Ops GCB Updated",
+    "account_name": "CN Connect Ltd",
+    "account_number": "1234567890",
+    "payment_channel_id": "{{paymentChannelId}}",
+    "currency_code": "GHS"
+  }
+}
+
+docs {
+PATCH /api/v1/admin/payment-accounts/{id}
+}

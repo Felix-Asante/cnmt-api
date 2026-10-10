@@ -1,0 +1,15 @@
+meta {
+  name: Get promo code by ID
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/promocodes/{{promoCodeId}}
+  body: none
+  auth: inherit
+}
+
+docs {
+GET /api/v1/admin/promocodes/{id}
+}

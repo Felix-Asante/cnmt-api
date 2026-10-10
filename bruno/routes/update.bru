@@ -1,0 +1,29 @@
+meta {
+  name: Update route
+  type: http
+  seq: 3
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/admin/routes/{{routeId}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "exchange_rate": "1.55",
+    "fee_type": "fixed",
+    "fee": "12.00",
+    "min_transfer_amount": "50.00",
+    "max_transfer_amount": "10000.00"
+  }
+}
+
+docs {
+PATCH /api/v1/admin/routes/{id}
+}

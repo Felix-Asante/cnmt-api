@@ -1,0 +1,15 @@
+meta {
+  name: Get promo code by code
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/promocodes/{{promoCode}}
+  body: none
+  auth: none
+}
+
+docs {
+GET /api/v1/promocodes/{code}
+}

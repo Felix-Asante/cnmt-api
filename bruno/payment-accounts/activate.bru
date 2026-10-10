@@ -1,0 +1,15 @@
+meta {
+  name: Activate payment account
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/admin/payment-accounts/{{paymentAccountId}}/activate
+  body: none
+  auth: inherit
+}
+
+docs {
+POST /api/v1/admin/payment-accounts/{id}/activate
+}
