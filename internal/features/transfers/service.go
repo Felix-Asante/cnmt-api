@@ -463,7 +463,34 @@ func (s *Service) GetByReference(ctx context.Context, reference string) (getTran
 		s.logger.Error("failed to map transfer to dto", "error", err)
 		return getTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
 	}
-	transferDTO.PaymentProofURL = s.paymentProofURL(ctx, transferDTO.PaymentProofKey)
+		transferDTO.PaymentProofURL = s.paymentProofURL(ctx, transferDTO.PaymentProofKey)
+	return transferDTO, nil
+}
+
+// GetByReferenceWithEvents is the admin view: same payload plus status history.
+func (s *Service) GetByReferenceWithEvents(ctx context.Context, reference string) (getTransferResponse, error) {
+	transferDTO, err := s.GetByReference(ctx, reference)
+	if err != nil {
+		return getTransferResponse{}, err
+	}
+
+	events, err := s.queries.GetTransferEventsByTransferID(ctx, transferDTO.ID)
+	if err != nil {
+		s.logger.Error("failed to get transfer events", "error", err)
+		return getTransferResponse{}, common.TranslateDBError(err)
+	}
+
+	transferDTO.Events = make([]transferEventDTO, len(events))
+	for i, event := range events {
+		transferDTO.Events[i] = transferEventDTO{
+			ID:        event.ID,
+			Status:    event.Status,
+			Actor:     event.Actor,
+			Note:      event.Note,
+			CreatedAt: event.CreatedAt,
+		}
+	}
+
 	return transferDTO, nil
 }
 
@@ -774,6 +801,57 @@ func (s *Service) CancelTransfer(ctx context.Context, transferID uuid.UUID, acto
 		Reference: transfer.Reference,
 		Status:    transfer.Status,
 	}, nil
+}
+
+// CancelTransferByCustomer lets a sender cancel only while payment is still pending.
+// Requires reference + matching sender phone (normalized E.164).
+func (s *Service) CancelTransferByCustomer(ctx context.Context, body cancelTransferByCustomerRequest) (adminActionResponse, error) {
+	reference := strings.TrimSpace(body.Reference)
+	if reference == "" {
+		return adminActionResponse{}, fmt.Errorf("%w: reference is required", httpx.BadRequestError)
+	}
+
+	senderPhone, err := common.NormalizePhone(body.SenderPhone)
+	if err != nil {
+		return adminActionResponse{}, err
+	}
+
+	transfer, err := s.queries.GetTransferByReference(ctx, reference)
+	if err != nil {
+		return adminActionResponse{}, common.TranslateDBError(err)
+	}
+
+	if transfer.SenderPhone != senderPhone {
+		return adminActionResponse{}, fmt.Errorf("%w: unable to cancel this transfer", httpx.ForbiddenError)
+	}
+
+	if transfer.Status == db.TransferStatusCANCELLED {
+		return adminActionResponse{
+			Reference: transfer.Reference,
+			Status:    transfer.Status,
+		}, nil
+	}
+
+	if transfer.Status != db.TransferStatusPENDINGPAYMENT {
+		return adminActionResponse{}, fmt.Errorf("%w: only unpaid transfers can be cancelled", httpx.ConflictError)
+	}
+
+	reason := "Cancelled by customer"
+	if body.Reason != nil && strings.TrimSpace(*body.Reason) != "" {
+		reason = strings.TrimSpace(*body.Reason)
+	}
+
+	// Trace who cancelled: prefix + verified sender phone (E.164).
+	actor := "customer:" + senderPhone
+
+	return s.transitionTransfer(
+		ctx,
+		transfer.ID,
+		db.TransferStatusPENDINGPAYMENT,
+		db.TransferStatusCANCELLED,
+		actor,
+		&reason,
+	)
 }
 
 func (s *Service) GetTransferOptions(ctx context.Context) (getTransferOptionsResponse, error) {

@@ -1,0 +1,17 @@
+meta {
+  name: Get transfer by reference (admin)
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/v1/admin/transfers/reference/{{transferReference}}
+  body: none
+  auth: inherit
+}
+
+docs {
+GET /api/v1/admin/transfers/reference/{reference}
+
+Includes status event history (actor + note) for ops tracing.
+}

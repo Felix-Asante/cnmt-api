@@ -108,6 +108,7 @@ type getTransferResponse struct {
 	Notes               *string                 `json:"notes,omitempty"`
 	ExpiresAt           time.Time               `json:"expires_at"`
 	CreatedAt           time.Time               `json:"created_at"`
+	Events              []transferEventDTO      `json:"events,omitempty"`
 }
 
 type createPaymentProofSignedUrlRequest struct {
@@ -125,6 +126,12 @@ type confirmPaymentProofRequest struct {
 	Reference        string    `json:"reference" validate:"required,min=1,max=100"`
 	Key              string    `json:"key" validate:"required,min=1"`
 	PaymentAccountID uuid.UUID `json:"payment_account_id" validate:"required"`
+}
+
+type cancelTransferByCustomerRequest struct {
+	Reference   string  `json:"reference" validate:"required,min=1,max=100"`
+	SenderPhone string  `json:"sender_phone" validate:"required,min=5,max=20"`
+	Reason      *string `json:"reason,omitempty" validate:"omitempty,min=1,max=500"`
 }
 
 type adminActionRequest struct {

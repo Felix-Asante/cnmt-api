@@ -1,0 +1,32 @@
+meta {
+  name: Cancel transfer by customer
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/api/v1/transfers/cancel
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "reference": "{{transferReference}}",
+    "sender_phone": "{{senderPhone}}",
+    "reason": "Entered wrong recipient details"
+  }
+}
+
+docs {
+POST /api/v1/transfers/cancel
+
+Customer cancel for PENDING_PAYMENT only.
+Requires reference + matching sender phone (E.164).
+Optional reason is stored on the CANCELLED event.
+Actor is recorded as customer:<e164>.
+}

@@ -74,6 +74,21 @@ func (c *Controller) getTransferByReference(w http.ResponseWriter, r *http.Reque
 	httpx.WriteJSON(w, http.StatusOK, transfer)
 }
 
+func (c *Controller) getAdminTransferByReference(w http.ResponseWriter, r *http.Request) {
+	reference := chi.URLParam(r, "reference")
+	if reference == "" {
+		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: reference is required", httpx.BadRequestError))
+		return
+	}
+
+	transfer, err := c.svc.GetByReferenceWithEvents(r.Context(), reference)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, transfer)
+}
+
 func (c *Controller) createPaymentProofSignedUrl(w http.ResponseWriter, r *http.Request) {
 	body, err := httpx.DecodeAndValidate[createPaymentProofSignedUrlRequest](r)
 	if err != nil {
@@ -197,6 +212,21 @@ func (c *Controller) cancelTransfer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp, err := c.svc.CancelTransfer(r.Context(), id, auth.ActorFromContext(r.Context()), *body.Reason)
+	if err != nil {
+		httpx.WriteError(w, httpx.StatusFromError(err), err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, resp)
+}
+
+func (c *Controller) cancelTransferByCustomer(w http.ResponseWriter, r *http.Request) {
+	body, err := httpx.DecodeAndValidate[cancelTransferByCustomerRequest](r)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	resp, err := c.svc.CancelTransferByCustomer(r.Context(), body)
 	if err != nil {
 		httpx.WriteError(w, httpx.StatusFromError(err), err)
 		return
