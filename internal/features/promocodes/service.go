@@ -133,7 +133,9 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, data UpdatePromoCode
 }
 
 
-func (s *Service) ApplyToFee(ctx context.Context, q *db.Queries, code, senderPhone string, fee decimal.Decimal) (db.PromoCode, decimal.Decimal, error) {
+// Apply validates a promo for the sender and returns the discounted transfer
+// amount (percentage taken off the principal, not the fee).
+func (s *Service) Apply(ctx context.Context, q *db.Queries, code, senderPhone string, amount decimal.Decimal) (db.PromoCode, decimal.Decimal, error) {
 	promo, err := q.GetPromoCodeByCodeForUpdate(ctx, code)
 	if err != nil {
 		translated := common.TranslateDBError(err)
@@ -175,8 +177,8 @@ func (s *Service) ApplyToFee(ctx context.Context, q *db.Queries, code, senderPho
 		return db.PromoCode{}, decimal.Zero, fmt.Errorf("%w", httpx.InternalServerError)
 	}
 
-	discount := common.RoundMoney(fee.Mul(pct).Div(decimal.NewFromInt(100)))
-	discounted := common.RoundMoney(fee.Sub(discount))
+	discount := common.RoundMoney(amount.Mul(pct).Div(decimal.NewFromInt(100)))
+	discounted := common.RoundMoney(amount.Sub(discount))
 	if discounted.IsNegative() {
 		discounted = decimal.Zero
 	}

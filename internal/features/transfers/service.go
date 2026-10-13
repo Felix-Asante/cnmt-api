@@ -202,13 +202,16 @@ func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body create
 		return createTransferResponse{}, err
 	}
 
+	sendForPayout := amtPaid
 	var appliedPromo *db.PromoCode
 	if body.PromoCode != "" {
-		promo, discountedFee, err := s.promoCodes.ApplyToFee(ctx, q, body.PromoCode, body.SenderPhone, calculatedFee)
+		promo, discountedAmount, err := s.promoCodes.Apply(ctx, q, body.PromoCode, body.SenderPhone, amtPaid)
 		if err != nil {
 			return createTransferResponse{}, err
 		}
-		calculatedFee = discountedFee
+		// Discount reduces what the sender pays; fee stays full and payout
+		// is still based on the original send amount.
+		amtPaid = discountedAmount
 		appliedPromo = &promo
 	}
 
@@ -227,7 +230,7 @@ func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body create
 	extraFee := optionalChannelExtraFee(channel.ExtraFee)
 	calculatedFee = common.RoundMoney(calculatedFee.Add(extraFee))
 
-	amtToReceive := common.RoundMoney(amtPaid.Mul(rate).Sub(calculatedFee))
+	amtToReceive := common.RoundMoney(sendForPayout.Mul(rate).Sub(calculatedFee))
 	if !amtToReceive.IsPositive() {
 		return createTransferResponse{}, fmt.Errorf("%w: amount received must be greater than zero after fees", httpx.BadRequestError)
 	}
