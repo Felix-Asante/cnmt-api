@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -37,7 +38,7 @@ func NewClient(cfg Config) (*Client, error) {
 	templateName := strings.TrimSpace(cfg.TemplateName)
 	templateLang := strings.TrimSpace(cfg.TemplateLang)
 	if templateLang == "" {
-		templateLang = "en"
+		templateLang = "en_US"
 	}
 
 	if accessToken == "" {
@@ -71,10 +72,6 @@ type TransferProcessingUpdate struct {
 	Reference string
 }
 
-// SendTransferProcessingUpdate sends the configured utility template with
-// body params (name, reference) and a dynamic visit-website button suffix
-// (reference), which Meta appends to the template URL prefix
-// e.g. https://www.cnmt.shop/en/track?ref=
 func (c *Client) SendTransferProcessingUpdate(ctx context.Context, in TransferProcessingUpdate) error {
 	to := normalizeWhatsAppTo(in.To)
 	if to == "" {
@@ -103,16 +100,16 @@ func (c *Client) SendTransferProcessingUpdate(ctx context.Context, in TransferPr
 				{
 					"type": "body",
 					"parameters": []map[string]string{
-						{"type": "text", "text": name},
-						{"type": "text", "text": ref},
+						{"type": "text", "parameter_name": "name", "text": name},
+						{"type": "text", "parameter_name": "reference", "text": ref},
 					},
 				},
 				{
-					"type": "button",
+					"type":     "button",
 					"sub_type": "url",
 					"index":    "0",
 					"parameters": []map[string]string{
-						{"type": "text", "text": ref},
+						{"type": "text", "parameter_name": "reference", "text": url.QueryEscape(ref)},
 					},
 				},
 			},

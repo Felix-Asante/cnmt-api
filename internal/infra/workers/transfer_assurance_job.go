@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	transferAssuranceAge      = 30 * time.Minute //4
-	transferAssuranceInterval = 5 * time.Minute //2
+	transferAssuranceAge      = 30 * time.Minute 
+	transferAssuranceInterval = 5 * time.Minute 
 	transferAssuranceBatch    = 100
 )
 
@@ -60,15 +60,10 @@ func (w *TransferAssuranceWorker) Work(ctx context.Context, _ *river.Job[Transfe
 }
 
 func (w *TransferAssuranceWorker) notifyOne(ctx context.Context, item db.ListTransfersNeedingAssuranceRow) error {
-	senderName := ""
-	if item.PaymentAccountName != nil {
-		senderName = *item.PaymentAccountName
-	}
-
 	if err := w.Notifier.TransferAssurance(ctx, notifications.TransferAssurance{
 		Reference:   item.Reference,
 		SenderPhone: item.SenderPhone,
-		SenderName:  senderName,
+		SenderName:  "Customer",
 	}); err != nil {
 		return err
 	}
