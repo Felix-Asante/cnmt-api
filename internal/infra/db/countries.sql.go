@@ -260,6 +260,36 @@ func (q *Queries) DoesPaymentChannelExist(ctx context.Context, arg DoesPaymentCh
 	return id, err
 }
 
+const getActiveIBANBankChannelByCountryID = `-- name: GetActiveIBANBankChannelByCountryID :one
+SELECT pc.id, pc.name, pc.channel_type, pc.is_active, pc.country_id, pc.created_at, pc.updated_at, pc.deleted_at, pc.extra_fee
+FROM payment_channels pc
+    JOIN countries c ON c.id = pc.country_id
+WHERE pc.country_id = $1
+    AND pc.channel_type = 'BANK'
+    AND upper(pc.name) = 'IBAN'
+    AND pc.is_active = TRUE
+    AND pc.deleted_at IS NULL
+    AND c.is_active = TRUE
+    AND c.deleted_at IS NULL
+`
+
+func (q *Queries) GetActiveIBANBankChannelByCountryID(ctx context.Context, countryID int64) (PaymentChannel, error) {
+	row := q.db.QueryRow(ctx, getActiveIBANBankChannelByCountryID, countryID)
+	var i PaymentChannel
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ChannelType,
+		&i.IsActive,
+		&i.CountryID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.ExtraFee,
+	)
+	return i, err
+}
+
 const getActivePCByCountryTypeAndID = `-- name: GetActivePCByCountryTypeAndID :one
 SELECT pc.id, pc.name, pc.channel_type, pc.is_active, pc.country_id, pc.created_at, pc.updated_at, pc.deleted_at, pc.extra_fee
 FROM payment_channels pc

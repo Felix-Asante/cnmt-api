@@ -112,6 +112,17 @@ WHERE pc.country_id = $1
     AND pc.deleted_at IS NULL
     AND c.is_active = TRUE
     AND c.deleted_at IS NULL;
+-- name: GetActiveIBANBankChannelByCountryID :one
+SELECT pc.*
+FROM payment_channels pc
+    JOIN countries c ON c.id = pc.country_id
+WHERE pc.country_id = $1
+    AND pc.channel_type = 'BANK'
+    AND upper(pc.name) = 'IBAN'
+    AND pc.is_active = TRUE
+    AND pc.deleted_at IS NULL
+    AND c.is_active = TRUE
+    AND c.deleted_at IS NULL;
 -- name: GetDestCountriesBySrcCountryID :many
 SELECT c.id,
     c.name,

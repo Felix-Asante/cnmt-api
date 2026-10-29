@@ -38,6 +38,7 @@ type Querier interface {
 	DeletePromoCode(ctx context.Context, id uuid.UUID) (PromoCode, error)
 	DeleteRoute(ctx context.Context, id uuid.UUID) (Route, error)
 	DoesPaymentChannelExist(ctx context.Context, arg DoesPaymentChannelExistParams) (uuid.UUID, error)
+	GetActiveIBANBankChannelByCountryID(ctx context.Context, countryID int64) (PaymentChannel, error)
 	GetActivePCByCountryTypeAndID(ctx context.Context, arg GetActivePCByCountryTypeAndIDParams) (PaymentChannel, error)
 	GetActivePaymentChannelsByCountryIDs(ctx context.Context, dollar_1 []int64) ([]GetActivePaymentChannelsByCountryIDsRow, error)
 	GetActiveRouteByCountries(ctx context.Context, arg GetActiveRouteByCountriesParams) (GetActiveRouteByCountriesRow, error)

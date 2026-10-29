@@ -35,9 +35,11 @@ type recipientDTO struct {
 
 	ReceivingNetworkID *uuid.UUID `json:"receiving_network_id,omitempty" validate:"omitempty,uuid,required_if=ReceivingMethod MOBILE_MONEY"`
 
-	BankID *uuid.UUID `json:"bank_id,omitempty" validate:"omitempty,uuid,required_if=ReceivingMethod BANK"`
+	BankID *uuid.UUID `json:"bank_id,omitempty" validate:"omitempty,uuid"`
 
-	AccountNumber *string `json:"account_number,omitempty" validate:"omitempty,alphanum,required_if=ReceivingMethod BANK"`
+	AccountNumber *string `json:"account_number,omitempty" validate:"omitempty,alphanum"`
+
+	IBAN *string `json:"iban,omitempty" validate:"omitempty,min=15,max=42"`
 }
 
 type createTransferResponse struct {

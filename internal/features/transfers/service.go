@@ -215,7 +215,7 @@ func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body create
 		appliedPromo = &promo
 	}
 
-	networkID, bankID, mobileNumber, bankAccount, err := receivingDetails(body.Recipient)
+	networkID, bankID, mobileNumber, bankAccount, err := resolveReceivingDetails(ctx, q, body.DestinationCountryID, body.Recipient)
 	if err != nil {
 		s.logger.Error("failed to get receiving details", "error", err)
 		return createTransferResponse{}, err
@@ -310,15 +310,37 @@ func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body create
 	return resp, nil
 }
 
-func receivingDetails(recipient *recipientDTO) (networkID, bankID pgtype.UUID, mobileNumber, bankAccount *string, err error) {
+func resolveReceivingDetails(
+	ctx context.Context,
+	q *db.Queries,
+	destinationCountryID int64,
+	recipient *recipientDTO,
+) (networkID, bankID pgtype.UUID, mobileNumber, bankAccount *string, err error) {
 	if recipient == nil {
 		return pgtype.UUID{}, pgtype.UUID{}, nil, nil, fmt.Errorf("%w: recipient is required", httpx.BadRequestError)
 	}
 
 	switch recipient.ReceivingMethod {
 	case db.ReceivingMethodsBANK:
+		ibanChannel, err := q.GetActiveIBANBankChannelByCountryID(ctx, destinationCountryID)
+		if err == nil {
+			if recipient.IBAN == nil {
+				return pgtype.UUID{}, pgtype.UUID{}, nil, nil, fmt.Errorf("%w: iban is required", httpx.BadRequestError)
+			}
+			iban, err := common.NormalizeAndValidateIBAN(*recipient.IBAN)
+			if err != nil {
+				return pgtype.UUID{}, pgtype.UUID{}, nil, nil, err
+			}
+			return pgtype.UUID{}, common.UuidToPgtype(ibanChannel.ID), nil, &iban, nil
+		}
+		if translated := common.TranslateDBError(err); !errors.Is(translated, httpx.NotFoundError) {
+			return pgtype.UUID{}, pgtype.UUID{}, nil, nil, translated
+		}
 		if recipient.BankID == nil {
 			return pgtype.UUID{}, pgtype.UUID{}, nil, nil, fmt.Errorf("%w: bank is required", httpx.BadRequestError)
+		}
+		if recipient.AccountNumber == nil || strings.TrimSpace(*recipient.AccountNumber) == "" {
+			return pgtype.UUID{}, pgtype.UUID{}, nil, nil, fmt.Errorf("%w: account number is required", httpx.BadRequestError)
 		}
 		return pgtype.UUID{}, common.UuidPtrToPgtype(recipient.BankID), nil, recipient.AccountNumber, nil
 	case db.ReceivingMethodsMOBILEMONEY:

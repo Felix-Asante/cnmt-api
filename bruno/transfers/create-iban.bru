@@ -1,0 +1,42 @@
+meta {
+  name: Create transfer (IBAN / Europe)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/transfers
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Idempotency-Key: {{$guid}}
+}
+
+body:json {
+  {
+    "source_country_id": {{sourceCountryId}},
+    "destination_country_id": {{europeCountryId}},
+    "amount_sent": "100.00",
+    "sender_phone": "+233241234567",
+    "recipient": {
+      "recipient_name": "Jane Doe",
+      "receiving_method": "BANK",
+      "iban": "DE89 3704 0044 0532 0130 00"
+    },
+    "notes": "Europe IBAN transfer"
+  }
+}
+
+script:post-response {
+  if (res.body) {
+    if (res.body.transfer_id) bru.setEnvVar("transferId", res.body.transfer_id);
+    if (res.body.reference) bru.setEnvVar("transferReference", res.body.reference);
+  }
+}
+
+docs {
+POST /api/v1/transfers — Europe IBAN: recipient_name + iban only
+}
