@@ -32,11 +32,12 @@ func NewFromEnv(logger *slog.Logger) (*Notifier, error) {
 	}
 
 	waClient, err := whatsapp.NewClient(whatsapp.Config{
-		AccessToken:   env.GetString("WHATSAPP_ACCESS_TOKEN", ""),
-		PhoneNumberID: env.GetString("WHATSAPP_PHONE_NUMBER_ID", ""),
-		TemplateName:  env.GetString("WHATSAPP_TEMPLATE_NAME", ""),
-		TemplateLang:  env.GetString("WHATSAPP_TEMPLATE_LANGUAGE", "en"),
-		Logger:        logger,
+		AccessToken:        env.GetString("WHATSAPP_ACCESS_TOKEN", ""),
+		PhoneNumberID:      env.GetString("WHATSAPP_PHONE_NUMBER_ID", ""),
+		ProcessingTemplate: env.GetString("WHATSAPP_TEMPLATE_NAME", ""),
+		ThanksTemplate:     env.GetString("WHATSAPP_THANKS_TEMPLATE_NAME", ""),
+		TemplateLang:       env.GetString("WHATSAPP_TEMPLATE_LANGUAGE", "en_US"),
+		Logger:             logger,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("whatsapp: %w", err)

@@ -5,16 +5,11 @@ import (
 	"log/slog"
 	"time"
 
+	"cnmt/internal/common/env"
 	"cnmt/internal/infra/db"
 	"cnmt/internal/infra/notifications"
 
 	"github.com/riverqueue/river"
-)
-
-const (
-	transferAssuranceAge      = 30 * time.Minute 
-	transferAssuranceInterval = 5 * time.Minute 
-	transferAssuranceBatch    = 100
 )
 
 type TransferAssuranceArgs struct{}
@@ -29,9 +24,12 @@ type TransferAssuranceWorker struct {
 }
 
 func (w *TransferAssuranceWorker) Work(ctx context.Context, _ *river.Job[TransferAssuranceArgs]) error {
+	age := time.Duration(env.GetInt("TRANSFER_ASSURANCE_AGE_MINUTES", 30)) * time.Minute
+	batch := int32(env.GetInt("TRANSFER_ASSURANCE_BATCH", 100))
+
 	items, err := w.Queries.ListTransfersNeedingAssurance(ctx, db.ListTransfersNeedingAssuranceParams{
-		OlderThan: time.Now().UTC().Add(-transferAssuranceAge),
-		RowLimit:  transferAssuranceBatch,
+		OlderThan: time.Now().UTC().Add(-age),
+		RowLimit:  batch,
 	})
 	if err != nil {
 		w.Logger.Error("failed to list transfers needing assurance", "error", err)
@@ -60,7 +58,7 @@ func (w *TransferAssuranceWorker) Work(ctx context.Context, _ *river.Job[Transfe
 }
 
 func (w *TransferAssuranceWorker) notifyOne(ctx context.Context, item db.ListTransfersNeedingAssuranceRow) error {
-	if err := w.Notifier.TransferAssurance(ctx, notifications.TransferAssurance{
+	if err := w.Notifier.TransferAssurance(ctx, notifications.TransferWhatsAppNotice{
 		Reference:   item.Reference,
 		SenderPhone: item.SenderPhone,
 		SenderName:  "Customer",
@@ -79,8 +77,9 @@ func (w *TransferAssuranceWorker) notifyOne(ctx context.Context, item db.ListTra
 }
 
 func newTransferAssurancePeriodicJob() *river.PeriodicJob {
+	interval := time.Duration(env.GetInt("TRANSFER_ASSURANCE_INTERVAL_MINUTES", 5)) * time.Minute
 	return river.NewPeriodicJob(
-		river.PeriodicInterval(transferAssuranceInterval),
+		river.PeriodicInterval(interval),
 		func() (river.JobArgs, *river.InsertOpts) {
 			return TransferAssuranceArgs{}, nil
 		},

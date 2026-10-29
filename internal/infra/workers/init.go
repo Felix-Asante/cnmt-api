@@ -32,7 +32,10 @@ func (w *workers) Init() (*river.Client[pgx.Tx], error) {
 			river.QueueDefault: {MaxWorkers: 10},
 		},
 		Workers:      registered,
-		PeriodicJobs: []*river.PeriodicJob{newTransferAssurancePeriodicJob()},
+		PeriodicJobs: []*river.PeriodicJob{
+			newTransferAssurancePeriodicJob(),
+			newTransferCompletedThanksPeriodicJob(),
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create river client: %w", err)
@@ -44,6 +47,11 @@ func setupWorkers(queries *db.Queries, notifier *notifications.Notifier, logger 
 	registered := river.NewWorkers()
 	river.AddWorker(registered, &NewTransferWorker{Notifier: notifier})
 	river.AddWorker(registered, &TransferAssuranceWorker{
+		Queries:  queries,
+		Notifier: notifier,
+		Logger:   logger,
+	})
+	river.AddWorker(registered, &TransferCompletedThanksWorker{
 		Queries:  queries,
 		Notifier: notifier,
 		Logger:   logger,

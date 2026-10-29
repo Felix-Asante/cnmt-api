@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 )
@@ -16,26 +15,35 @@ import (
 const graphAPIBase = "https://graph.facebook.com/v21.0"
 
 type Client struct {
-	accessToken   string
-	phoneNumberID string
-	templateName  string
-	templateLang  string
-	http          *http.Client
-	logger        *slog.Logger
+	accessToken         string
+	phoneNumberID       string
+	templateLang        string
+	processingTemplate  string
+	thanksTemplate      string
+	http                *http.Client
+	logger              *slog.Logger
 }
 
 type Config struct {
-	AccessToken   string
-	PhoneNumberID string
-	TemplateName  string
-	TemplateLang  string
-	Logger        *slog.Logger
+	AccessToken        string
+	PhoneNumberID      string
+	TemplateLang       string
+	ProcessingTemplate string
+	ThanksTemplate     string
+	Logger             *slog.Logger
+}
+
+type TemplateMessage struct {
+	To        string
+	Name      string
+	Reference string
 }
 
 func NewClient(cfg Config) (*Client, error) {
 	accessToken := strings.TrimSpace(cfg.AccessToken)
 	phoneNumberID := strings.TrimSpace(cfg.PhoneNumberID)
-	templateName := strings.TrimSpace(cfg.TemplateName)
+	processingTemplate := strings.TrimSpace(cfg.ProcessingTemplate)
+	thanksTemplate := strings.TrimSpace(cfg.ThanksTemplate)
 	templateLang := strings.TrimSpace(cfg.TemplateLang)
 	if templateLang == "" {
 		templateLang = "en_US"
@@ -47,8 +55,11 @@ func NewClient(cfg Config) (*Client, error) {
 	if phoneNumberID == "" {
 		return nil, fmt.Errorf("WHATSAPP_PHONE_NUMBER_ID is required")
 	}
-	if templateName == "" {
+	if processingTemplate == "" {
 		return nil, fmt.Errorf("WHATSAPP_TEMPLATE_NAME is required")
+	}
+	if thanksTemplate == "" {
+		return nil, fmt.Errorf("WHATSAPP_THANKS_TEMPLATE_NAME is required")
 	}
 
 	logger := cfg.Logger
@@ -57,22 +68,25 @@ func NewClient(cfg Config) (*Client, error) {
 	}
 
 	return &Client{
-		accessToken:   accessToken,
-		phoneNumberID: phoneNumberID,
-		templateName:  templateName,
-		templateLang:  templateLang,
-		http:          &http.Client{Timeout: 15 * time.Second},
-		logger:        logger,
+		accessToken:        accessToken,
+		phoneNumberID:      phoneNumberID,
+		templateLang:       templateLang,
+		processingTemplate: processingTemplate,
+		thanksTemplate:     thanksTemplate,
+		http:               &http.Client{Timeout: 15 * time.Second},
+		logger:             logger,
 	}, nil
 }
 
-type TransferProcessingUpdate struct {
-	To        string
-	Name      string
-	Reference string
+func (c *Client) SendTransferProcessingUpdate(ctx context.Context, in TemplateMessage) error {
+	return c.sendNamedTemplate(ctx, c.processingTemplate, in)
 }
 
-func (c *Client) SendTransferProcessingUpdate(ctx context.Context, in TransferProcessingUpdate) error {
+func (c *Client) SendTransferCompletedThanks(ctx context.Context, in TemplateMessage) error {
+	return c.sendNamedTemplate(ctx, c.thanksTemplate, in)
+}
+
+func (c *Client) sendNamedTemplate(ctx context.Context, templateName string, in TemplateMessage) error {
 	to := normalizeWhatsAppTo(in.To)
 	if to == "" {
 		return fmt.Errorf("recipient phone is required")
@@ -92,7 +106,7 @@ func (c *Client) SendTransferProcessingUpdate(ctx context.Context, in TransferPr
 		"to":                to,
 		"type":              "template",
 		"template": map[string]any{
-			"name": c.templateName,
+			"name": templateName,
 			"language": map[string]string{
 				"code": c.templateLang,
 			},
@@ -109,7 +123,7 @@ func (c *Client) SendTransferProcessingUpdate(ctx context.Context, in TransferPr
 					"sub_type": "url",
 					"index":    "0",
 					"parameters": []map[string]string{
-						{"type": "text", "parameter_name": "reference", "text": url.QueryEscape(ref)},
+						{"type": "text", "text": ref},
 					},
 				},
 			},
@@ -121,8 +135,8 @@ func (c *Client) SendTransferProcessingUpdate(ctx context.Context, in TransferPr
 		return fmt.Errorf("marshal whatsapp payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/%s/messages", graphAPIBase, c.phoneNumberID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	endpoint := fmt.Sprintf("%s/%s/messages", graphAPIBase, c.phoneNumberID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create whatsapp request: %w", err)
 	}
@@ -141,6 +155,7 @@ func (c *Client) SendTransferProcessingUpdate(ctx context.Context, in TransferPr
 			"status", resp.StatusCode,
 			"to", to,
 			"reference", ref,
+			"template", templateName,
 			"response", string(respBody),
 		)
 		return fmt.Errorf("whatsapp API returned %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
@@ -149,7 +164,7 @@ func (c *Client) SendTransferProcessingUpdate(ctx context.Context, in TransferPr
 	c.logger.Info("whatsapp template sent",
 		"to", to,
 		"reference", ref,
-		"template", c.templateName,
+		"template", templateName,
 	)
 	return nil
 }

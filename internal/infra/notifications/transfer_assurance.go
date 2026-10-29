@@ -8,13 +8,25 @@ import (
 	"cnmt/internal/infra/notifications/whatsapp"
 )
 
-type TransferAssurance struct {
+type TransferWhatsAppNotice struct {
 	Reference   string
 	SenderPhone string
 	SenderName  string
 }
 
-func (n *Notifier) TransferAssurance(ctx context.Context, in TransferAssurance) error {
+func (n *Notifier) TransferAssurance(ctx context.Context, in TransferWhatsAppNotice) error {
+	return n.sendTransferWhatsApp(ctx, in, n.whatsapp.SendTransferProcessingUpdate)
+}
+
+func (n *Notifier) TransferCompletedThanks(ctx context.Context, in TransferWhatsAppNotice) error {
+	return n.sendTransferWhatsApp(ctx, in, n.whatsapp.SendTransferCompletedThanks)
+}
+
+func (n *Notifier) sendTransferWhatsApp(
+	ctx context.Context,
+	in TransferWhatsAppNotice,
+	send func(context.Context, whatsapp.TemplateMessage) error,
+) error {
 	if n.whatsapp == nil {
 		return fmt.Errorf("whatsapp is not configured")
 	}
@@ -25,7 +37,7 @@ func (n *Notifier) TransferAssurance(ctx context.Context, in TransferAssurance) 
 		return fmt.Errorf("transfer reference is required")
 	}
 
-	return n.whatsapp.SendTransferProcessingUpdate(ctx, whatsapp.TransferProcessingUpdate{
+	return send(ctx, whatsapp.TemplateMessage{
 		To:        in.SenderPhone,
 		Name:      in.SenderName,
 		Reference: in.Reference,

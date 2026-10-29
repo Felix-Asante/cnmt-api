@@ -70,7 +70,9 @@ type Querier interface {
 	ListPaymentAccounts(ctx context.Context, arg ListPaymentAccountsParams) ([]ListPaymentAccountsRow, error)
 	ListRoutes(ctx context.Context, arg ListRoutesParams) ([]Route, error)
 	ListTransfersNeedingAssurance(ctx context.Context, arg ListTransfersNeedingAssuranceParams) ([]ListTransfersNeedingAssuranceRow, error)
+	ListTransfersNeedingCompletionThanks(ctx context.Context, rowLimit int32) ([]ListTransfersNeedingCompletionThanksRow, error)
 	MarkTransferAssuranceSent(ctx context.Context, id uuid.UUID) (int64, error)
+	MarkTransferCompletionThanksSent(ctx context.Context, id uuid.UUID) (int64, error)
 	RedeemPromoCode(ctx context.Context, arg RedeemPromoCodeParams) (uuid.UUID, error)
 	SetPaymentAccountActive(ctx context.Context, arg SetPaymentAccountActiveParams) (PaymentAccount, error)
 	SetPaymentProofKey(ctx context.Context, arg SetPaymentProofKeyParams) error

@@ -183,3 +183,22 @@ SET assurance_sent_at = now(),
 WHERE id = $1
     AND assurance_sent_at IS NULL
     AND deleted_at IS NULL;
+-- name: ListTransfersNeedingCompletionThanks :many
+SELECT id,
+    reference,
+    sender_phone,
+    status,
+    updated_at
+FROM transfers
+WHERE deleted_at IS NULL
+    AND completion_thanks_sent_at IS NULL
+    AND status = 'COMPLETED'
+ORDER BY updated_at ASC
+LIMIT sqlc.arg(row_limit);
+-- name: MarkTransferCompletionThanksSent :execrows
+UPDATE transfers
+SET completion_thanks_sent_at = now(),
+    updated_at = now()
+WHERE id = $1
+    AND completion_thanks_sent_at IS NULL
+    AND deleted_at IS NULL;
