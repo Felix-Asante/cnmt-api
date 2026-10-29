@@ -540,6 +540,7 @@ const listTransfersNeedingAssurance = `-- name: ListTransfersNeedingAssurance :m
 SELECT id,
     reference,
     sender_phone,
+    payment_account_name,
     status,
     amount_sent,
     amount_received,
@@ -565,14 +566,15 @@ type ListTransfersNeedingAssuranceParams struct {
 }
 
 type ListTransfersNeedingAssuranceRow struct {
-	ID                uuid.UUID
-	Reference         string
-	SenderPhone       string
-	Status            TransferStatus
-	AmountSent        pgtype.Numeric
-	AmountReceived    pgtype.Numeric
-	PaymentReceivedAt pgtype.Timestamptz
-	CreatedAt         time.Time
+	ID                 uuid.UUID
+	Reference          string
+	SenderPhone        string
+	PaymentAccountName *string
+	Status             TransferStatus
+	AmountSent         pgtype.Numeric
+	AmountReceived     pgtype.Numeric
+	PaymentReceivedAt  pgtype.Timestamptz
+	CreatedAt          time.Time
 }
 
 func (q *Queries) ListTransfersNeedingAssurance(ctx context.Context, arg ListTransfersNeedingAssuranceParams) ([]ListTransfersNeedingAssuranceRow, error) {
@@ -588,6 +590,7 @@ func (q *Queries) ListTransfersNeedingAssurance(ctx context.Context, arg ListTra
 			&i.ID,
 			&i.Reference,
 			&i.SenderPhone,
+			&i.PaymentAccountName,
 			&i.Status,
 			&i.AmountSent,
 			&i.AmountReceived,

@@ -49,7 +49,7 @@ type createTransferResponse struct {
 	SourceCountryCurrency      string            `json:"-"`
 	DestinationCountryCurrency string            `json:"-"`
 	Fee                        string            `json:"-"`
-	AmountPaid                 string            `json:"-"`
+	AmountPaid                 string            `json:"amount_paid"`
 	AmountReceived             string            `json:"-"`
 	PromoCode                  *promoCodeViewDTO `json:"promo_code,omitempty"`
 }

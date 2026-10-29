@@ -158,6 +158,7 @@ WHERE t.deleted_at IS NULL
 SELECT id,
     reference,
     sender_phone,
+    payment_account_name,
     status,
     amount_sent,
     amount_received,
