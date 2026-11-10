@@ -57,8 +57,13 @@ type createTransferResponse struct {
 }
 
 type promoCodeViewDTO struct {
-	Code               string          `json:"code"`
-	DiscountPercentage decimal.Decimal `json:"discount_percentage"`
+	Code               string                 `json:"code"`
+	DiscountPercentage decimal.Decimal        `json:"discount_percentage"`
+	DiscountTarget     db.PromoDiscountTarget `json:"discount_target"`
+	// Taken off what the sender pays (source currency).
+	DiscountAmount string `json:"discount_amount"`
+	// Added to what the recipient gets (destination currency).
+	BonusAmount string `json:"bonus_amount"`
 }
 
 type countryDTO struct {
@@ -222,6 +227,9 @@ type transferRow struct {
 	ReceivingBankAccount       *string
 	PromoCode                  *string
 	PromoDiscountPercentage    pgtype.Numeric
+	PromoDiscountTarget        *db.PromoDiscountTarget
+	PromoDiscountAmount        pgtype.Numeric
+	PromoBonusAmount           pgtype.Numeric
 	Notes                      *string
 	ExpiresAt                  time.Time
 	CreatedAt                  time.Time
@@ -260,6 +268,9 @@ func transferRowFromReference(row db.GetTransferByReferenceRow) transferRow {
 		ReceivingBankAccount:       row.ReceivingBankAccount,
 		PromoCode:                  row.PromoCode,
 		PromoDiscountPercentage:    row.PromoDiscountPercentage,
+		PromoDiscountTarget:        row.PromoDiscountTarget,
+		PromoDiscountAmount:        row.PromoDiscountAmount,
+		PromoBonusAmount:           row.PromoBonusAmount,
 		Notes:                      row.Notes,
 		ExpiresAt:                  row.ExpiresAt,
 		CreatedAt:                  row.CreatedAt,
@@ -299,6 +310,9 @@ func transferRowFromList(row db.GetAllTransfersRow) transferRow {
 		ReceivingBankAccount:       row.ReceivingBankAccount,
 		PromoCode:                  row.PromoCode,
 		PromoDiscountPercentage:    row.PromoDiscountPercentage,
+		PromoDiscountTarget:        row.PromoDiscountTarget,
+		PromoDiscountAmount:        row.PromoDiscountAmount,
+		PromoBonusAmount:           row.PromoBonusAmount,
 		Notes:                      row.Notes,
 		ExpiresAt:                  row.ExpiresAt,
 		CreatedAt:                  row.CreatedAt,
@@ -375,13 +389,24 @@ func mapPromoCode(transfer transferRow) (*promoCodeViewDTO, error) {
 	if transfer.PromoCode == nil {
 		return nil, nil
 	}
-	discount, err := common.PgNumericToDecimal(transfer.PromoDiscountPercentage)
+	pct, err := common.PgNumericToDecimal(transfer.PromoDiscountPercentage)
+	if err != nil {
+		return nil, err
+	}
+	discount, err := common.PgNumericToDecimal(transfer.PromoDiscountAmount)
+	if err != nil {
+		return nil, err
+	}
+	bonus, err := common.PgNumericToDecimal(transfer.PromoBonusAmount)
 	if err != nil {
 		return nil, err
 	}
 	return &promoCodeViewDTO{
 		Code:               *transfer.PromoCode,
-		DiscountPercentage: discount,
+		DiscountPercentage: pct,
+		DiscountTarget:     *transfer.PromoDiscountTarget,
+		DiscountAmount:     discount.StringFixed(common.MoneyDecimalPlaces),
+		BonusAmount:        bonus.StringFixed(common.MoneyDecimalPlaces),
 	}, nil
 }
 

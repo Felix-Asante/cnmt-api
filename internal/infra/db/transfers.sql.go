@@ -113,7 +113,10 @@ SELECT t.id, t.reference, t.route_id, t.status, t.sender_phone, t.receiving_acco
     network.name AS receiving_network_name,
     bank.name AS receiving_bank_name,
     pc.code AS promo_code,
-    pcr.discount_percentage AS promo_discount_percentage
+    pcr.discount_percentage AS promo_discount_percentage,
+    pcr.discount_target AS promo_discount_target,
+    pcr.discount_amount AS promo_discount_amount,
+    pcr.bonus_amount AS promo_bonus_amount
 FROM transfers t
     JOIN routes r ON r.id = t.route_id
     JOIN countries src ON src.id = r.source_country_id
@@ -194,6 +197,9 @@ type GetAllTransfersRow struct {
 	ReceivingBankName          *string
 	PromoCode                  *string
 	PromoDiscountPercentage    pgtype.Numeric
+	PromoDiscountTarget        *PromoDiscountTarget
+	PromoDiscountAmount        pgtype.Numeric
+	PromoBonusAmount           pgtype.Numeric
 }
 
 func (q *Queries) GetAllTransfers(ctx context.Context, arg GetAllTransfersParams) ([]GetAllTransfersRow, error) {
@@ -256,6 +262,9 @@ func (q *Queries) GetAllTransfers(ctx context.Context, arg GetAllTransfersParams
 			&i.ReceivingBankName,
 			&i.PromoCode,
 			&i.PromoDiscountPercentage,
+			&i.PromoDiscountTarget,
+			&i.PromoDiscountAmount,
+			&i.PromoBonusAmount,
 		); err != nil {
 			return nil, err
 		}
@@ -434,7 +443,10 @@ SELECT t.id, t.reference, t.route_id, t.status, t.sender_phone, t.receiving_acco
     network.name AS receiving_network_name,
     bank.name AS receiving_bank_name,
     pc.code AS promo_code,
-    pcr.discount_percentage AS promo_discount_percentage
+    pcr.discount_percentage AS promo_discount_percentage,
+    pcr.discount_target AS promo_discount_target,
+    pcr.discount_amount AS promo_discount_amount,
+    pcr.bonus_amount AS promo_bonus_amount
 FROM transfers t
     JOIN routes r ON r.id = t.route_id
     JOIN countries src ON src.id = r.source_country_id
@@ -490,6 +502,9 @@ type GetTransferByReferenceRow struct {
 	ReceivingBankName          *string
 	PromoCode                  *string
 	PromoDiscountPercentage    pgtype.Numeric
+	PromoDiscountTarget        *PromoDiscountTarget
+	PromoDiscountAmount        pgtype.Numeric
+	PromoBonusAmount           pgtype.Numeric
 }
 
 func (q *Queries) GetTransferByReference(ctx context.Context, reference string) (GetTransferByReferenceRow, error) {
@@ -538,6 +553,9 @@ func (q *Queries) GetTransferByReference(ctx context.Context, reference string) 
 		&i.ReceivingBankName,
 		&i.PromoCode,
 		&i.PromoDiscountPercentage,
+		&i.PromoDiscountTarget,
+		&i.PromoDiscountAmount,
+		&i.PromoBonusAmount,
 	)
 	return i, err
 }

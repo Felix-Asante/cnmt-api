@@ -11,7 +11,10 @@ SELECT t.*,
     network.name AS receiving_network_name,
     bank.name AS receiving_bank_name,
     pc.code AS promo_code,
-    pcr.discount_percentage AS promo_discount_percentage
+    pcr.discount_percentage AS promo_discount_percentage,
+    pcr.discount_target AS promo_discount_target,
+    pcr.discount_amount AS promo_discount_amount,
+    pcr.bonus_amount AS promo_bonus_amount
 FROM transfers t
     JOIN routes r ON r.id = t.route_id
     JOIN countries src ON src.id = r.source_country_id
@@ -110,7 +113,10 @@ SELECT t.*,
     network.name AS receiving_network_name,
     bank.name AS receiving_bank_name,
     pc.code AS promo_code,
-    pcr.discount_percentage AS promo_discount_percentage
+    pcr.discount_percentage AS promo_discount_percentage,
+    pcr.discount_target AS promo_discount_target,
+    pcr.discount_amount AS promo_discount_amount,
+    pcr.bonus_amount AS promo_bonus_amount
 FROM transfers t
     JOIN routes r ON r.id = t.route_id
     JOIN countries src ON src.id = r.source_country_id

@@ -13,7 +13,10 @@ import (
 
 type Querier interface {
 	CompleteIdempotencyKey(ctx context.Context, arg CompleteIdempotencyKeyParams) error
+	CountAliveRoutesByIDs(ctx context.Context, routeIds []uuid.UUID) (int64, error)
 	CountRedemptionsByPromoCodeAndSender(ctx context.Context, arg CountRedemptionsByPromoCodeAndSenderParams) (int64, error)
+	// Redemptions on cancelled/failed transfers do not count against limits, so an
+	// abandoned (expired) transfer releases its use of the code.
 	CountRedemptionsByPromoCodeID(ctx context.Context, promoCodeID uuid.UUID) (int64, error)
 	CreateCountry(ctx context.Context, arg CreateCountryParams) (Country, error)
 	CreatePaymentAccount(ctx context.Context, arg CreatePaymentAccountParams) (PaymentAccount, error)
@@ -36,6 +39,7 @@ type Querier interface {
 	DeletePaymentAccount(ctx context.Context, id uuid.UUID) (PaymentAccount, error)
 	DeletePaymentChannel(ctx context.Context, id uuid.UUID) (PaymentChannel, error)
 	DeletePromoCode(ctx context.Context, id uuid.UUID) (PromoCode, error)
+	DeletePromoCodeRoutes(ctx context.Context, promoCodeID uuid.UUID) error
 	DeleteRoute(ctx context.Context, id uuid.UUID) (Route, error)
 	DoesPaymentChannelExist(ctx context.Context, arg DoesPaymentChannelExistParams) (uuid.UUID, error)
 	GetActiveIBANBankChannelByCountryID(ctx context.Context, countryID int64) (PaymentChannel, error)
@@ -60,20 +64,24 @@ type Querier interface {
 	GetPromoCodeByCode(ctx context.Context, code string) (PromoCode, error)
 	GetPromoCodeByCodeForUpdate(ctx context.Context, code string) (PromoCode, error)
 	GetPromoCodeByID(ctx context.Context, id uuid.UUID) (PromoCode, error)
+	GetPromoCodeByIDForUpdate(ctx context.Context, id uuid.UUID) (PromoCode, error)
+	GetPromoCodeRouteRule(ctx context.Context, arg GetPromoCodeRouteRuleParams) (PromoCodeRoute, error)
 	GetTransferByID(ctx context.Context, id uuid.UUID) (GetTransferByIDRow, error)
 	GetTransferByReference(ctx context.Context, reference string) (GetTransferByReferenceRow, error)
 	GetTransferEventsByTransferID(ctx context.Context, transferID uuid.UUID) ([]TransferEvent, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) (IdempotencyKey, error)
+	InsertPromoCodeRoute(ctx context.Context, arg InsertPromoCodeRouteParams) error
 	ListActivePaymentAccountsByCountryID(ctx context.Context, countryID int64) ([]ListActivePaymentAccountsByCountryIDRow, error)
 	ListPaymentAccounts(ctx context.Context, arg ListPaymentAccountsParams) ([]ListPaymentAccountsRow, error)
+	ListPromoCodeRoutes(ctx context.Context, promoCodeIds []uuid.UUID) ([]ListPromoCodeRoutesRow, error)
 	ListRoutes(ctx context.Context, arg ListRoutesParams) ([]Route, error)
 	ListTransfersNeedingAssurance(ctx context.Context, arg ListTransfersNeedingAssuranceParams) ([]ListTransfersNeedingAssuranceRow, error)
 	ListTransfersNeedingCompletionThanks(ctx context.Context, rowLimit int32) ([]ListTransfersNeedingCompletionThanksRow, error)
 	MarkTransferAssuranceSent(ctx context.Context, id uuid.UUID) (int64, error)
 	MarkTransferCompletionThanksSent(ctx context.Context, id uuid.UUID) (int64, error)
-	RedeemPromoCode(ctx context.Context, arg RedeemPromoCodeParams) (uuid.UUID, error)
+	RedeemPromoCode(ctx context.Context, arg RedeemPromoCodeParams) error
 	SetPaymentAccountActive(ctx context.Context, arg SetPaymentAccountActiveParams) (PaymentAccount, error)
 	SetPaymentProofKey(ctx context.Context, arg SetPaymentProofKeyParams) error
 	ToggleRouteActive(ctx context.Context, id uuid.UUID) (Route, error)

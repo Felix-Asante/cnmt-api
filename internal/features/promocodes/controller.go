@@ -3,6 +3,7 @@ package promocodes
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"cnmt/internal/common/httpx"
 
@@ -32,8 +33,24 @@ func (c *Controller) create(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, promoCode)
 }
 
+// getByCode previews a code. Optional query params: source_country_id and
+// destination_country_id (check the route), sender_phone (check per-user limit).
 func (c *Controller) getByCode(w http.ResponseWriter, r *http.Request) {
-	promoCode, err := c.service.GetByCode(r.Context(), chi.URLParam(r, "code"))
+	query := r.URL.Query()
+	srcID, err1 := strconv.ParseInt(query.Get("source_country_id"), 10, 64)
+	dstID, err2 := strconv.ParseInt(query.Get("destination_country_id"), 10, 64)
+	hasSrc, hasDst := query.Has("source_country_id"), query.Has("destination_country_id")
+	if hasSrc != hasDst || (hasSrc && (err1 != nil || err2 != nil)) {
+		httpx.WriteError(w, http.StatusBadRequest, fmt.Errorf("%w: source_country_id and destination_country_id must both be valid ids", httpx.BadRequestError))
+		return
+	}
+	req := PreviewPromoCodeRequest{
+		SourceCountryID:      srcID,
+		DestinationCountryID: dstID,
+		SenderPhone:          query.Get("sender_phone"),
+	}
+
+	promoCode, err := c.service.Preview(r.Context(), chi.URLParam(r, "code"), req)
 	if err != nil {
 		httpx.WriteError(w, httpx.StatusFromError(err), err)
 		return

@@ -12,74 +12,143 @@ import (
 	"cnmt/internal/infra/db"
 
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Service struct {
+	db      *pgxpool.Pool
 	queries *db.Queries
 	logger  *slog.Logger
 }
 
-func NewService(queries *db.Queries, logger *slog.Logger) *Service {
-	return &Service{queries: queries, logger: logger}
+func NewService(pool *pgxpool.Pool, queries *db.Queries, logger *slog.Logger) *Service {
+	return &Service{db: pool, queries: queries, logger: logger}
 }
 
+// ---- Admin ----
+
 func (s *Service) Create(ctx context.Context, data CreatePromoCodeRequest) (GetPromoCodeResponse, error) {
-	if err := validatePromoCodeInput(data.DiscountPercentage, data.StartDate, data.EndDate, data.MaxUses, data.MaxUsesPerUser); err != nil {
+	in := data.PromoCodeInput.withDefaults()
+	if err := in.validate(); err != nil {
 		return GetPromoCodeResponse{}, err
 	}
-
-	discountPercentage, err := common.DecimalToPgNumeric(data.DiscountPercentage)
+	pct, err := common.DecimalToPgNumeric(in.DiscountPercentage)
 	if err != nil {
-		s.logger.Error("failed to convert discount percentage to pg numeric", "error", err)
 		return GetPromoCodeResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
 	}
 
-	promoCode, err := s.queries.CreatePromoCode(ctx, db.CreatePromoCodeParams{
-		Code:               data.Code,
-		DiscountPercentage: discountPercentage,
-		StartDate:          data.StartDate,
-		EndDate:            data.EndDate,
-		MaxUses:            int32(data.MaxUses),
-		MaxUsesPerUser:     int32(data.MaxUsesPerUser),
+	var resp GetPromoCodeResponse
+	err = s.inTx(ctx, func(q *db.Queries) error {
+		promo, err := q.CreatePromoCode(ctx, db.CreatePromoCodeParams{
+			Code:               data.Code,
+			DiscountPercentage: pct,
+			StartDate:          in.StartDate,
+			EndDate:            in.EndDate,
+			MaxUses:            int32(in.MaxUses),
+			MaxUsesPerUser:     int32(in.MaxUsesPerUser),
+			AppliesToAllRoutes: *in.AppliesToAllRoutes,
+			DiscountTarget:     in.DiscountTarget,
+		})
+		if err != nil {
+			return common.TranslateDBError(err)
+		}
+		if err := s.saveRoutes(ctx, q, promo.ID, in.Routes); err != nil {
+			return err
+		}
+		resp, err = s.toResponse(ctx, q, promo)
+		return err
 	})
-	if err != nil {
-		s.logger.Error("failed to create promo code", "error", err)
-		return GetPromoCodeResponse{}, common.TranslateDBError(err)
-	}
-
-	return toGetPromoCodeResponse(promoCode)
+	return resp, err
 }
 
-func (s *Service) GetByCode(ctx context.Context, code string) (PreviewPromoCodeResponse, error) {
-	promoCode, err := s.queries.GetPromoCodeByCode(ctx, code)
+// Update replaces the promo's settings and route rules.
+func (s *Service) Update(ctx context.Context, id uuid.UUID, data UpdatePromoCodeRequest) (GetPromoCodeResponse, error) {
+	in := data.withDefaults()
+	if err := in.validate(); err != nil {
+		return GetPromoCodeResponse{}, err
+	}
+	pct, err := common.DecimalToPgNumeric(in.DiscountPercentage)
 	if err != nil {
-		return PreviewPromoCodeResponse{}, common.TranslateDBError(err)
+		return GetPromoCodeResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
 	}
 
-	now := time.Now().UTC()
-	if now.Before(promoCode.StartDate) || now.After(promoCode.EndDate) {
-		return PreviewPromoCodeResponse{}, fmt.Errorf("%w", httpx.NotFoundError)
-	}
+	var resp GetPromoCodeResponse
+	err = s.inTx(ctx, func(q *db.Queries) error {
+		// Lock the row so a redemption can't land between the check and the update.
+		if _, err := q.GetPromoCodeByIDForUpdate(ctx, id); err != nil {
+			return common.TranslateDBError(err)
+		}
+		used, err := q.CountRedemptionsByPromoCodeID(ctx, id)
+		if err != nil {
+			return common.TranslateDBError(err)
+		}
+		if int64(in.MaxUses) < used {
+			return badRequest(fmt.Sprintf("max uses cannot be lower than current usage (%d)", used))
+		}
 
-	used, err := s.queries.CountRedemptionsByPromoCodeID(ctx, promoCode.ID)
-	if err != nil {
-		s.logger.Error("failed to count promo code redemptions", "error", err, "promo_code_id", promoCode.ID)
-		return PreviewPromoCodeResponse{}, common.TranslateDBError(err)
-	}
-	if used >= int64(promoCode.MaxUses) {
-		return PreviewPromoCodeResponse{}, fmt.Errorf("%w", httpx.NotFoundError)
-	}
-
-	return toPreviewPromoCodeResponse(promoCode)
+		promo, err := q.UpdatePromoCode(ctx, db.UpdatePromoCodeParams{
+			ID:                 id,
+			DiscountPercentage: pct,
+			StartDate:          in.StartDate,
+			EndDate:            in.EndDate,
+			MaxUses:            int32(in.MaxUses),
+			MaxUsesPerUser:     int32(in.MaxUsesPerUser),
+			AppliesToAllRoutes: *in.AppliesToAllRoutes,
+			DiscountTarget:     in.DiscountTarget,
+		})
+		if err != nil {
+			return common.TranslateDBError(err)
+		}
+		if err := q.DeletePromoCodeRoutes(ctx, id); err != nil {
+			return common.TranslateDBError(err)
+		}
+		if err := s.saveRoutes(ctx, q, id, in.Routes); err != nil {
+			return err
+		}
+		resp, err = s.toResponse(ctx, q, promo)
+		return err
+	})
+	return resp, err
 }
 
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (GetPromoCodeResponse, error) {
-	promoCode, err := s.queries.GetPromoCodeByID(ctx, id)
+	promo, err := s.queries.GetPromoCodeByID(ctx, id)
 	if err != nil {
 		return GetPromoCodeResponse{}, common.TranslateDBError(err)
 	}
-	return toGetPromoCodeResponse(promoCode)
+	return s.toResponse(ctx, s.queries, promo)
+}
+
+func (s *Service) GetAll(ctx context.Context) ([]GetPromoCodeResponse, error) {
+	promos, err := s.queries.GetAllPromoCodes(ctx)
+	if err != nil {
+		return nil, common.TranslateDBError(err)
+	}
+
+	ids := make([]uuid.UUID, len(promos))
+	for i, p := range promos {
+		ids[i] = p.ID
+	}
+	routes, err := s.queries.ListPromoCodeRoutes(ctx, ids)
+	if err != nil {
+		return nil, common.TranslateDBError(err)
+	}
+	routesByPromo := make(map[uuid.UUID][]db.ListPromoCodeRoutesRow)
+	for _, r := range routes {
+		routesByPromo[r.PromoCodeID] = append(routesByPromo[r.PromoCodeID], r)
+	}
+
+	responses := make([]GetPromoCodeResponse, 0, len(promos))
+	for _, p := range promos {
+		resp, err := toGetPromoCodeResponse(p, routesByPromo[p.ID])
+		if err != nil {
+			return nil, err
+		}
+		responses = append(responses, resp)
+	}
+	return responses, nil
 }
 
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
@@ -89,138 +158,208 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *Service) GetAll(ctx context.Context) ([]GetPromoCodeResponse, error) {
-	promoCodes, err := s.queries.GetAllPromoCodes(ctx)
+// ---- Public / transfers ----
+
+// Preview checks a code before a transfer is created. Route and sender are
+// optional; when given, the same checks as transfer creation are applied.
+func (s *Service) Preview(ctx context.Context, code string, req PreviewPromoCodeRequest) (PreviewPromoCodeResponse, error) {
+	promo, err := s.queries.GetPromoCodeByCode(ctx, code)
 	if err != nil {
-		return nil, common.TranslateDBError(err)
+		return PreviewPromoCodeResponse{}, common.TranslateDBError(err)
 	}
 
-	responses := make([]GetPromoCodeResponse, 0, len(promoCodes))
-	for _, promoCode := range promoCodes {
-		response, err := toGetPromoCodeResponse(promoCode)
+	var routeID *uuid.UUID
+	if req.SourceCountryID > 0 && req.DestinationCountryID > 0 {
+		route, err := s.queries.GetActiveRouteByCountries(ctx, db.GetActiveRouteByCountriesParams{
+			SourceCountryID:      req.SourceCountryID,
+			DestinationCountryID: req.DestinationCountryID,
+		})
 		if err != nil {
-			return nil, err
+			return PreviewPromoCodeResponse{}, common.TranslateDBError(err)
 		}
-		responses = append(responses, response)
+		routeID = &route.ID
 	}
-	return responses, nil
+
+	sender := req.SenderPhone
+	if sender != "" {
+		if sender, err = common.NormalizePhone(sender); err != nil {
+			return PreviewPromoCodeResponse{}, badRequest("sender phone is not valid")
+		}
+	}
+
+	resolved, err := s.resolve(ctx, s.queries, promo, sender, routeID)
+	if err != nil {
+		return PreviewPromoCodeResponse{}, asHTTPError(err, httpx.NotFoundError)
+	}
+	return PreviewPromoCodeResponse{
+		Code:               promo.Code,
+		DiscountPercentage: resolved.Percentage,
+		DiscountTarget:     resolved.Target,
+		AppliesToAllRoutes: promo.AppliesToAllRoutes,
+	}, nil
 }
 
-func (s *Service) Update(ctx context.Context, id uuid.UUID, data UpdatePromoCodeRequest) (GetPromoCodeResponse, error) {
-	if err := validatePromoCodeInput(data.DiscountPercentage, data.StartDate, data.EndDate, data.MaxUses, data.MaxUsesPerUser); err != nil {
-		return GetPromoCodeResponse{}, err
-	}
-
-	discountPercentage, err := common.DecimalToPgNumeric(data.DiscountPercentage)
-	if err != nil {
-		s.logger.Error("failed to convert discount percentage to pg numeric", "error", err)
-		return GetPromoCodeResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
-	}
-
-	promoCode, err := s.queries.UpdatePromoCode(ctx, db.UpdatePromoCodeParams{
-		ID:                 id,
-		DiscountPercentage: discountPercentage,
-		StartDate:          data.StartDate,
-		EndDate:            data.EndDate,
-		MaxUses:            int32(data.MaxUses),
-		MaxUsesPerUser:     int32(data.MaxUsesPerUser),
-	})
-	if err != nil {
-		return GetPromoCodeResponse{}, common.TranslateDBError(err)
-	}
-
-	return toGetPromoCodeResponse(promoCode)
-}
-
-
-// Apply validates a promo for the sender and returns the discounted transfer
-// amount (percentage taken off the principal, not the fee).
-func (s *Service) Apply(ctx context.Context, q *db.Queries, code, senderPhone string, amount decimal.Decimal) (db.PromoCode, decimal.Decimal, error) {
+// Resolve locks the code and checks the sender can use it on the route.
+// q must be bound to the transfer's transaction.
+func (s *Service) Resolve(ctx context.Context, q *db.Queries, code, senderPhone string, routeID uuid.UUID) (Resolved, error) {
 	promo, err := q.GetPromoCodeByCodeForUpdate(ctx, code)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Resolved{}, badRequest(errNotValid.Error())
+	}
 	if err != nil {
-		translated := common.TranslateDBError(err)
-		if errors.Is(translated, httpx.NotFoundError) {
-			return db.PromoCode{}, decimal.Zero, fmt.Errorf("%w: promo code is not valid", httpx.BadRequestError)
-		}
-		return db.PromoCode{}, decimal.Zero, translated
+		return Resolved{}, common.TranslateDBError(err)
 	}
 
-	now := time.Now().UTC()
-	if now.Before(promo.StartDate) || now.After(promo.EndDate) {
-		return db.PromoCode{}, decimal.Zero, fmt.Errorf("%w: promo code is not valid", httpx.BadRequestError)
-	}
-
-	used, err := q.CountRedemptionsByPromoCodeID(ctx, promo.ID)
+	resolved, err := s.resolve(ctx, q, promo, senderPhone, &routeID)
 	if err != nil {
-		s.logger.Error("failed to count promo code redemptions", "error", err, "promo_code_id", promo.ID)
-		return db.PromoCode{}, decimal.Zero, common.TranslateDBError(err)
+		return Resolved{}, asHTTPError(err, httpx.BadRequestError)
 	}
-	if used >= int64(promo.MaxUses) {
-		return db.PromoCode{}, decimal.Zero, fmt.Errorf("%w: promo code is not valid", httpx.BadRequestError)
-	}
-
-	usedBySender, err := q.CountRedemptionsByPromoCodeAndSender(ctx, db.CountRedemptionsByPromoCodeAndSenderParams{
-		PromoCodeID: promo.ID,
-		SenderPhone: senderPhone,
-	})
-	if err != nil {
-		s.logger.Error("failed to count promo code redemptions for sender", "error", err, "promo_code_id", promo.ID)
-		return db.PromoCode{}, decimal.Zero, common.TranslateDBError(err)
-	}
-	if usedBySender >= int64(promo.MaxUsesPerUser) {
-		return db.PromoCode{}, decimal.Zero, fmt.Errorf("%w: promo code has already been used", httpx.BadRequestError)
-	}
-
-	pct, err := common.PgNumericToDecimal(promo.DiscountPercentage)
-	if err != nil {
-		s.logger.Error("failed to convert promo discount percentage", "error", err, "promo_code_id", promo.ID)
-		return db.PromoCode{}, decimal.Zero, fmt.Errorf("%w", httpx.InternalServerError)
-	}
-
-	discount := common.RoundMoney(amount.Mul(pct).Div(decimal.NewFromInt(100)))
-	discounted := common.RoundMoney(amount.Sub(discount))
-	if discounted.IsNegative() {
-		discounted = decimal.Zero
-	}
-
-	return promo, discounted, nil
+	return resolved, nil
 }
 
+// Redeem records that a transfer used the promo, and what it did.
+func (s *Service) Redeem(ctx context.Context, q *db.Queries, resolved Resolved, result Result, transferID uuid.UUID, senderPhone string) error {
+	pct, err1 := common.DecimalToPgNumeric(resolved.Percentage)
+	discount, err2 := common.DecimalToPgNumeric(result.DiscountAmount)
+	bonus, err3 := common.DecimalToPgNumeric(result.BonusAmount)
+	if err := errors.Join(err1, err2, err3); err != nil {
+		return fmt.Errorf("%w", httpx.InternalServerError)
+	}
 
-func (s *Service) RedeemForTransfer(ctx context.Context, q *db.Queries, promo db.PromoCode, transferID uuid.UUID, senderPhone string) error {
-	_, err := q.RedeemPromoCode(ctx, db.RedeemPromoCodeParams{
-		PromoCodeID:        promo.ID,
+	err := q.RedeemPromoCode(ctx, db.RedeemPromoCodeParams{
+		PromoCodeID:        resolved.Promo.ID,
 		TransferID:         transferID,
 		SenderPhone:        senderPhone,
-		DiscountPercentage: promo.DiscountPercentage,
+		DiscountPercentage: pct,
+		DiscountTarget:     resolved.Target,
+		DiscountAmount:     discount,
+		BonusAmount:        bonus,
 	})
 	if err != nil {
-		s.logger.Error("failed to redeem promo code", "error", err, "promo_code_id", promo.ID, "transfer_id", transferID)
+		s.logger.Error("failed to redeem promo code", "error", err, "promo_code_id", resolved.Promo.ID, "transfer_id", transferID)
 		return common.TranslateDBError(err)
 	}
 	return nil
 }
 
-func validatePromoCodeInput(discount decimal.Decimal, startDate, endDate time.Time, maxUses, maxUsesPerUser int) error {
-	if discount.IsNegative() || discount.GreaterThan(decimal.NewFromInt(100)) {
-		return fmt.Errorf("%w: discount percentage must be between 0 and 100", httpx.BadRequestError)
+// resolve runs the eligibility checks. senderPhone and routeID are optional.
+// Returns an ineligibleError when the code can't be used.
+func (s *Service) resolve(ctx context.Context, q *db.Queries, promo db.PromoCode, senderPhone string, routeID *uuid.UUID) (Resolved, error) {
+	if !isActive(promo, time.Now().UTC()) {
+		return Resolved{}, errNotValid
 	}
-	if !endDate.After(startDate) {
-		return fmt.Errorf("%w: end date must be after start date", httpx.BadRequestError)
+
+	used, err := q.CountRedemptionsByPromoCodeID(ctx, promo.ID)
+	if err != nil {
+		return Resolved{}, common.TranslateDBError(err)
 	}
-	if maxUses < 1 {
-		return fmt.Errorf("%w: max uses must be greater than 0", httpx.BadRequestError)
+	if used >= int64(promo.MaxUses) {
+		return Resolved{}, errNotValid
 	}
-	if maxUsesPerUser < 1 || maxUsesPerUser > maxUses {
-		return fmt.Errorf("%w: max uses per user must be between 1 and max uses", httpx.BadRequestError)
+
+	if senderPhone != "" {
+		usedBySender, err := q.CountRedemptionsByPromoCodeAndSender(ctx, db.CountRedemptionsByPromoCodeAndSenderParams{
+			PromoCodeID: promo.ID,
+			SenderPhone: senderPhone,
+		})
+		if err != nil {
+			return Resolved{}, common.TranslateDBError(err)
+		}
+		if usedBySender >= int64(promo.MaxUsesPerUser) {
+			return Resolved{}, errAlreadyUsed
+		}
+	}
+
+	if routeID == nil {
+		// No route to check against: describe the code's default behaviour.
+		pct, err := common.PgNumericToDecimal(promo.DiscountPercentage)
+		if err != nil {
+			return Resolved{}, fmt.Errorf("%w", httpx.InternalServerError)
+		}
+		return Resolved{Promo: promo, Target: promo.DiscountTarget, Percentage: pct}, nil
+	}
+
+	var rule *db.PromoCodeRoute
+	r, err := q.GetPromoCodeRouteRule(ctx, db.GetPromoCodeRouteRuleParams{PromoCodeID: promo.ID, RouteID: *routeID})
+	switch {
+	case err == nil:
+		rule = &r
+	case !errors.Is(err, pgx.ErrNoRows):
+		return Resolved{}, common.TranslateDBError(err)
+	}
+
+	target, pct, err := ruleForRoute(promo, rule)
+	if err != nil {
+		return Resolved{}, err
+	}
+	return Resolved{Promo: promo, Target: target, Percentage: pct}, nil
+}
+
+// ---- Helpers ----
+
+func (s *Service) saveRoutes(ctx context.Context, q *db.Queries, promoID uuid.UUID, routes []RouteRule) error {
+	if len(routes) == 0 {
+		return nil
+	}
+
+	ids := make([]uuid.UUID, len(routes))
+	for i, r := range routes {
+		ids[i] = r.RouteID
+	}
+	alive, err := q.CountAliveRoutesByIDs(ctx, ids)
+	if err != nil {
+		return common.TranslateDBError(err)
+	}
+	if alive != int64(len(ids)) {
+		return badRequest("one or more routes do not exist")
+	}
+
+	for _, r := range routes {
+		var pct pgtype.Numeric
+		if r.DiscountPercentage != nil {
+			if pct, err = common.DecimalToPgNumeric(*r.DiscountPercentage); err != nil {
+				return fmt.Errorf("%w", httpx.InternalServerError)
+			}
+		}
+		if err := q.InsertPromoCodeRoute(ctx, db.InsertPromoCodeRouteParams{
+			PromoCodeID:        promoID,
+			RouteID:            r.RouteID,
+			DiscountTarget:     r.DiscountTarget,
+			DiscountPercentage: pct,
+		}); err != nil {
+			return common.TranslateDBError(err)
+		}
 	}
 	return nil
 }
 
-func discountFromPromo(promoCode db.PromoCode) (decimal.Decimal, error) {
-	discount, err := common.PgNumericToDecimal(promoCode.DiscountPercentage)
+func (s *Service) toResponse(ctx context.Context, q *db.Queries, promo db.PromoCode) (GetPromoCodeResponse, error) {
+	routes, err := q.ListPromoCodeRoutes(ctx, []uuid.UUID{promo.ID})
 	if err != nil {
-		return decimal.Zero, fmt.Errorf("%w", httpx.InternalServerError)
+		return GetPromoCodeResponse{}, common.TranslateDBError(err)
 	}
-	return discount, nil
+	return toGetPromoCodeResponse(promo, routes)
+}
+
+func (s *Service) inTx(ctx context.Context, fn func(q *db.Queries) error) error {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return common.TranslateDBError(err)
+	}
+	defer tx.Rollback(ctx)
+
+	if err := fn(s.queries.WithTx(tx)); err != nil {
+		return err
+	}
+	return common.TranslateDBError(tx.Commit(ctx))
+}
+
+// asHTTPError maps an ineligibleError to the given HTTP sentinel; other errors
+// pass through unchanged.
+func asHTTPError(err error, sentinel error) error {
+	var ie ineligibleError
+	if errors.As(err, &ie) {
+		return fmt.Errorf("%w: %s", sentinel, ie)
+	}
+	return err
 }

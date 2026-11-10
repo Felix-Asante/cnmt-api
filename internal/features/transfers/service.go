@@ -202,17 +202,15 @@ func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body create
 		return createTransferResponse{}, err
 	}
 
-	sendForPayout := amtPaid
-	var appliedPromo *db.PromoCode
+	// Check the promo early so an invalid code fails fast; it is applied once
+	// the payout is known.
+	var promo *promocodes.Resolved
 	if body.PromoCode != "" {
-		promo, discountedAmount, err := s.promoCodes.Apply(ctx, q, body.PromoCode, body.SenderPhone, amtPaid)
+		resolved, err := s.promoCodes.Resolve(ctx, q, body.PromoCode, body.SenderPhone, route.ID)
 		if err != nil {
 			return createTransferResponse{}, err
 		}
-		// Discount reduces what the sender pays; fee stays full and payout
-		// is still based on the original send amount.
-		amtPaid = discountedAmount
-		appliedPromo = &promo
+		promo = &resolved
 	}
 
 	networkID, bankID, mobileNumber, bankAccount, err := resolveReceivingDetails(ctx, q, body.DestinationCountryID, body.Recipient)
@@ -230,7 +228,15 @@ func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body create
 	extraFee := optionalChannelExtraFee(channel.ExtraFee)
 	calculatedFee = common.RoundMoney(calculatedFee.Add(extraFee))
 
-	amtToReceive := common.RoundMoney(sendForPayout.Mul(rate).Sub(calculatedFee))
+	// Fee and payout are based on the full send amount; the promo then either
+	// lowers what the sender pays or raises what the recipient gets.
+	amtToReceive := common.RoundMoney(amtPaid.Mul(rate).Sub(calculatedFee))
+
+	var promoResult promocodes.Result
+	if promo != nil {
+		promoResult = promo.Apply(amtPaid, rate, amtToReceive)
+		amtPaid, amtToReceive = promoResult.AmountPaid, promoResult.AmountReceived
+	}
 	if !amtToReceive.IsPositive() {
 		return createTransferResponse{}, fmt.Errorf("%w: amount received must be greater than zero after fees", httpx.BadRequestError)
 	}
@@ -278,8 +284,8 @@ func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body create
 		return createTransferResponse{}, common.TranslateDBError(err)
 	}
 
-	if appliedPromo != nil {
-		if err := s.promoCodes.RedeemForTransfer(ctx, q, *appliedPromo, transferID, body.SenderPhone); err != nil {
+	if promo != nil {
+		if err := s.promoCodes.Redeem(ctx, q, *promo, promoResult, transferID, body.SenderPhone); err != nil {
 			return createTransferResponse{}, err
 		}
 	}
@@ -296,15 +302,13 @@ func (s *Service) createTransfer(ctx context.Context, q *db.Queries, body create
 		AmountPaid:                 amtPaid.StringFixed(common.MoneyDecimalPlaces),
 		AmountReceived:             amtToReceive.StringFixed(common.MoneyDecimalPlaces),
 	}
-	if appliedPromo != nil {
-		discount, err := common.PgNumericToDecimal(appliedPromo.DiscountPercentage)
-		if err != nil {
-			s.logger.Error("failed to convert promo discount percentage", "error", err, "promo_code_id", appliedPromo.ID)
-			return createTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
-		}
+	if promo != nil {
 		resp.PromoCode = &promoCodeViewDTO{
-			Code:               appliedPromo.Code,
-			DiscountPercentage: discount,
+			Code:               promo.Promo.Code,
+			DiscountPercentage: promo.Percentage,
+			DiscountTarget:     promo.Target,
+			DiscountAmount:     promoResult.DiscountAmount.StringFixed(common.MoneyDecimalPlaces),
+			BonusAmount:        promoResult.BonusAmount.StringFixed(common.MoneyDecimalPlaces),
 		}
 	}
 	return resp, nil

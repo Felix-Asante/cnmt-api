@@ -13,11 +13,27 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countAliveRoutesByIDs = `-- name: CountAliveRoutesByIDs :one
+SELECT COUNT(*)::bigint
+FROM routes
+WHERE id = ANY($1::uuid [])
+    AND deleted_at IS NULL
+`
+
+func (q *Queries) CountAliveRoutesByIDs(ctx context.Context, routeIds []uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countAliveRoutesByIDs, routeIds)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countRedemptionsByPromoCodeAndSender = `-- name: CountRedemptionsByPromoCodeAndSender :one
 SELECT COUNT(*)::bigint
-FROM promo_code_redemptions
-WHERE promo_code_id = $1
-    AND sender_phone = $2
+FROM promo_code_redemptions pcr
+    JOIN transfers t ON t.id = pcr.transfer_id
+WHERE pcr.promo_code_id = $1
+    AND pcr.sender_phone = $2
+    AND t.status NOT IN ('CANCELLED', 'FAILED')
 `
 
 type CountRedemptionsByPromoCodeAndSenderParams struct {
@@ -34,10 +50,14 @@ func (q *Queries) CountRedemptionsByPromoCodeAndSender(ctx context.Context, arg 
 
 const countRedemptionsByPromoCodeID = `-- name: CountRedemptionsByPromoCodeID :one
 SELECT COUNT(*)::bigint
-FROM promo_code_redemptions
-WHERE promo_code_id = $1
+FROM promo_code_redemptions pcr
+    JOIN transfers t ON t.id = pcr.transfer_id
+WHERE pcr.promo_code_id = $1
+    AND t.status NOT IN ('CANCELLED', 'FAILED')
 `
 
+// Redemptions on cancelled/failed transfers do not count against limits, so an
+// abandoned (expired) transfer releases its use of the code.
 func (q *Queries) CountRedemptionsByPromoCodeID(ctx context.Context, promoCodeID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countRedemptionsByPromoCodeID, promoCodeID)
 	var column_1 int64
@@ -52,7 +72,9 @@ INSERT INTO promo_codes (
         start_date,
         end_date,
         max_uses,
-        max_uses_per_user
+        max_uses_per_user,
+        applies_to_all_routes,
+        discount_target
     )
 VALUES (
         UPPER(trim($1)),
@@ -60,9 +82,11 @@ VALUES (
         $3,
         $4,
         $5,
-        $6
+        $6,
+        $7,
+        $8
     )
-RETURNING id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at
+RETURNING id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at, applies_to_all_routes, discount_target
 `
 
 type CreatePromoCodeParams struct {
@@ -72,6 +96,8 @@ type CreatePromoCodeParams struct {
 	EndDate            time.Time
 	MaxUses            int32
 	MaxUsesPerUser     int32
+	AppliesToAllRoutes bool
+	DiscountTarget     PromoDiscountTarget
 }
 
 func (q *Queries) CreatePromoCode(ctx context.Context, arg CreatePromoCodeParams) (PromoCode, error) {
@@ -82,6 +108,8 @@ func (q *Queries) CreatePromoCode(ctx context.Context, arg CreatePromoCodeParams
 		arg.EndDate,
 		arg.MaxUses,
 		arg.MaxUsesPerUser,
+		arg.AppliesToAllRoutes,
+		arg.DiscountTarget,
 	)
 	var i PromoCode
 	err := row.Scan(
@@ -95,6 +123,8 @@ func (q *Queries) CreatePromoCode(ctx context.Context, arg CreatePromoCodeParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.AppliesToAllRoutes,
+		&i.DiscountTarget,
 	)
 	return i, err
 }
@@ -105,7 +135,7 @@ SET deleted_at = now(),
     updated_at = now()
 WHERE id = $1
     AND deleted_at IS NULL
-RETURNING id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at
+RETURNING id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at, applies_to_all_routes, discount_target
 `
 
 func (q *Queries) DeletePromoCode(ctx context.Context, id uuid.UUID) (PromoCode, error) {
@@ -122,12 +152,24 @@ func (q *Queries) DeletePromoCode(ctx context.Context, id uuid.UUID) (PromoCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.AppliesToAllRoutes,
+		&i.DiscountTarget,
 	)
 	return i, err
 }
 
+const deletePromoCodeRoutes = `-- name: DeletePromoCodeRoutes :exec
+DELETE FROM promo_code_routes
+WHERE promo_code_id = $1
+`
+
+func (q *Queries) DeletePromoCodeRoutes(ctx context.Context, promoCodeID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deletePromoCodeRoutes, promoCodeID)
+	return err
+}
+
 const getAllPromoCodes = `-- name: GetAllPromoCodes :many
-SELECT id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at
+SELECT id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at, applies_to_all_routes, discount_target
 FROM promo_codes
 WHERE deleted_at IS NULL
 ORDER BY created_at DESC
@@ -153,6 +195,8 @@ func (q *Queries) GetAllPromoCodes(ctx context.Context) ([]PromoCode, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.AppliesToAllRoutes,
+			&i.DiscountTarget,
 		); err != nil {
 			return nil, err
 		}
@@ -165,7 +209,7 @@ func (q *Queries) GetAllPromoCodes(ctx context.Context) ([]PromoCode, error) {
 }
 
 const getPromoCodeByCode = `-- name: GetPromoCodeByCode :one
-SELECT id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at
+SELECT id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at, applies_to_all_routes, discount_target
 FROM promo_codes
 WHERE code = UPPER(trim($1))
     AND deleted_at IS NULL
@@ -185,12 +229,14 @@ func (q *Queries) GetPromoCodeByCode(ctx context.Context, code string) (PromoCod
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.AppliesToAllRoutes,
+		&i.DiscountTarget,
 	)
 	return i, err
 }
 
 const getPromoCodeByCodeForUpdate = `-- name: GetPromoCodeByCodeForUpdate :one
-SELECT id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at
+SELECT id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at, applies_to_all_routes, discount_target
 FROM promo_codes
 WHERE code = UPPER(trim($1))
     AND deleted_at IS NULL
@@ -211,12 +257,14 @@ func (q *Queries) GetPromoCodeByCodeForUpdate(ctx context.Context, code string) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.AppliesToAllRoutes,
+		&i.DiscountTarget,
 	)
 	return i, err
 }
 
 const getPromoCodeByID = `-- name: GetPromoCodeByID :one
-SELECT id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at
+SELECT id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at, applies_to_all_routes, discount_target
 FROM promo_codes
 WHERE id = $1
     AND deleted_at IS NULL
@@ -236,19 +284,157 @@ func (q *Queries) GetPromoCodeByID(ctx context.Context, id uuid.UUID) (PromoCode
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.AppliesToAllRoutes,
+		&i.DiscountTarget,
 	)
 	return i, err
 }
 
-const redeemPromoCode = `-- name: RedeemPromoCode :one
+const getPromoCodeByIDForUpdate = `-- name: GetPromoCodeByIDForUpdate :one
+SELECT id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at, applies_to_all_routes, discount_target
+FROM promo_codes
+WHERE id = $1
+    AND deleted_at IS NULL
+FOR UPDATE
+`
+
+func (q *Queries) GetPromoCodeByIDForUpdate(ctx context.Context, id uuid.UUID) (PromoCode, error) {
+	row := q.db.QueryRow(ctx, getPromoCodeByIDForUpdate, id)
+	var i PromoCode
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.DiscountPercentage,
+		&i.StartDate,
+		&i.EndDate,
+		&i.MaxUses,
+		&i.MaxUsesPerUser,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.AppliesToAllRoutes,
+		&i.DiscountTarget,
+	)
+	return i, err
+}
+
+const getPromoCodeRouteRule = `-- name: GetPromoCodeRouteRule :one
+SELECT promo_code_id, route_id, discount_target, discount_percentage
+FROM promo_code_routes
+WHERE promo_code_id = $1
+    AND route_id = $2
+`
+
+type GetPromoCodeRouteRuleParams struct {
+	PromoCodeID uuid.UUID
+	RouteID     uuid.UUID
+}
+
+func (q *Queries) GetPromoCodeRouteRule(ctx context.Context, arg GetPromoCodeRouteRuleParams) (PromoCodeRoute, error) {
+	row := q.db.QueryRow(ctx, getPromoCodeRouteRule, arg.PromoCodeID, arg.RouteID)
+	var i PromoCodeRoute
+	err := row.Scan(
+		&i.PromoCodeID,
+		&i.RouteID,
+		&i.DiscountTarget,
+		&i.DiscountPercentage,
+	)
+	return i, err
+}
+
+const insertPromoCodeRoute = `-- name: InsertPromoCodeRoute :exec
+INSERT INTO promo_code_routes (
+        promo_code_id,
+        route_id,
+        discount_target,
+        discount_percentage
+    )
+VALUES ($1, $2, $3, $4)
+`
+
+type InsertPromoCodeRouteParams struct {
+	PromoCodeID        uuid.UUID
+	RouteID            uuid.UUID
+	DiscountTarget     PromoDiscountTarget
+	DiscountPercentage pgtype.Numeric
+}
+
+func (q *Queries) InsertPromoCodeRoute(ctx context.Context, arg InsertPromoCodeRouteParams) error {
+	_, err := q.db.Exec(ctx, insertPromoCodeRoute,
+		arg.PromoCodeID,
+		arg.RouteID,
+		arg.DiscountTarget,
+		arg.DiscountPercentage,
+	)
+	return err
+}
+
+const listPromoCodeRoutes = `-- name: ListPromoCodeRoutes :many
+SELECT pcr.promo_code_id, pcr.route_id, pcr.discount_target, pcr.discount_percentage,
+    src.id AS source_country_id,
+    src.name AS source_country_name,
+    dst.id AS destination_country_id,
+    dst.name AS destination_country_name
+FROM promo_code_routes pcr
+    JOIN routes r ON r.id = pcr.route_id
+    JOIN countries src ON src.id = r.source_country_id
+    JOIN countries dst ON dst.id = r.destination_country_id
+WHERE pcr.promo_code_id = ANY($1::uuid [])
+ORDER BY src.name,
+    dst.name
+`
+
+type ListPromoCodeRoutesRow struct {
+	PromoCodeID            uuid.UUID
+	RouteID                uuid.UUID
+	DiscountTarget         PromoDiscountTarget
+	DiscountPercentage     pgtype.Numeric
+	SourceCountryID        int64
+	SourceCountryName      string
+	DestinationCountryID   int64
+	DestinationCountryName string
+}
+
+func (q *Queries) ListPromoCodeRoutes(ctx context.Context, promoCodeIds []uuid.UUID) ([]ListPromoCodeRoutesRow, error) {
+	rows, err := q.db.Query(ctx, listPromoCodeRoutes, promoCodeIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPromoCodeRoutesRow{}
+	for rows.Next() {
+		var i ListPromoCodeRoutesRow
+		if err := rows.Scan(
+			&i.PromoCodeID,
+			&i.RouteID,
+			&i.DiscountTarget,
+			&i.DiscountPercentage,
+			&i.SourceCountryID,
+			&i.SourceCountryName,
+			&i.DestinationCountryID,
+			&i.DestinationCountryName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const redeemPromoCode = `-- name: RedeemPromoCode :exec
 INSERT INTO promo_code_redemptions (
         promo_code_id,
         transfer_id,
         sender_phone,
-        discount_percentage
+        discount_percentage,
+        discount_target,
+        discount_amount,
+        bonus_amount
     )
-VALUES ($1, $2, $3, $4)
-RETURNING id
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type RedeemPromoCodeParams struct {
@@ -256,50 +442,60 @@ type RedeemPromoCodeParams struct {
 	TransferID         uuid.UUID
 	SenderPhone        string
 	DiscountPercentage pgtype.Numeric
+	DiscountTarget     PromoDiscountTarget
+	DiscountAmount     pgtype.Numeric
+	BonusAmount        pgtype.Numeric
 }
 
-func (q *Queries) RedeemPromoCode(ctx context.Context, arg RedeemPromoCodeParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, redeemPromoCode,
+func (q *Queries) RedeemPromoCode(ctx context.Context, arg RedeemPromoCodeParams) error {
+	_, err := q.db.Exec(ctx, redeemPromoCode,
 		arg.PromoCodeID,
 		arg.TransferID,
 		arg.SenderPhone,
 		arg.DiscountPercentage,
+		arg.DiscountTarget,
+		arg.DiscountAmount,
+		arg.BonusAmount,
 	)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
+	return err
 }
 
 const updatePromoCode = `-- name: UpdatePromoCode :one
 UPDATE promo_codes
-SET discount_percentage = $2,
-    start_date = $3,
-    end_date = $4,
-    max_uses = $5,
-    max_uses_per_user = $6,
+SET discount_percentage = $1,
+    start_date = $2,
+    end_date = $3,
+    max_uses = $4,
+    max_uses_per_user = $5,
+    applies_to_all_routes = $6,
+    discount_target = $7,
     updated_at = now()
-WHERE id = $1
+WHERE id = $8
     AND deleted_at IS NULL
-RETURNING id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at
+RETURNING id, code, discount_percentage, start_date, end_date, max_uses, max_uses_per_user, created_at, updated_at, deleted_at, applies_to_all_routes, discount_target
 `
 
 type UpdatePromoCodeParams struct {
-	ID                 uuid.UUID
 	DiscountPercentage pgtype.Numeric
 	StartDate          time.Time
 	EndDate            time.Time
 	MaxUses            int32
 	MaxUsesPerUser     int32
+	AppliesToAllRoutes bool
+	DiscountTarget     PromoDiscountTarget
+	ID                 uuid.UUID
 }
 
 func (q *Queries) UpdatePromoCode(ctx context.Context, arg UpdatePromoCodeParams) (PromoCode, error) {
 	row := q.db.QueryRow(ctx, updatePromoCode,
-		arg.ID,
 		arg.DiscountPercentage,
 		arg.StartDate,
 		arg.EndDate,
 		arg.MaxUses,
 		arg.MaxUsesPerUser,
+		arg.AppliesToAllRoutes,
+		arg.DiscountTarget,
+		arg.ID,
 	)
 	var i PromoCode
 	err := row.Scan(
@@ -313,6 +509,8 @@ func (q *Queries) UpdatePromoCode(ctx context.Context, arg UpdatePromoCodeParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.AppliesToAllRoutes,
+		&i.DiscountTarget,
 	)
 	return i, err
 }

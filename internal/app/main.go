@@ -130,7 +130,7 @@ func initRoutes(r *chi.Mux, config RoutesConfig) {
 	authMiddleware := auth.NewMiddleware(authSvc, jwtAuth)
 	authCtrl := auth.NewController(authSvc)
 
-	promoCodeSvc := promocodes.NewService(config.dbQueries, config.logger)
+	promoCodeSvc := promocodes.NewService(config.dbConn, config.dbQueries, config.logger)
 	transferServiceConfig := transfers.ServiceConfig{
 		DB:           config.dbConn,
 		Queries:      config.dbQueries,

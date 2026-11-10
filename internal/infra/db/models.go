@@ -55,6 +55,48 @@ func (ns NullFeeType) Value() (driver.Value, error) {
 	return string(ns.FeeType), nil
 }
 
+type PromoDiscountTarget string
+
+const (
+	PromoDiscountTargetSENDAMOUNT      PromoDiscountTarget = "SEND_AMOUNT"
+	PromoDiscountTargetRECIPIENTAMOUNT PromoDiscountTarget = "RECIPIENT_AMOUNT"
+)
+
+func (e *PromoDiscountTarget) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PromoDiscountTarget(s)
+	case string:
+		*e = PromoDiscountTarget(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PromoDiscountTarget: %T", src)
+	}
+	return nil
+}
+
+type NullPromoDiscountTarget struct {
+	PromoDiscountTarget PromoDiscountTarget
+	Valid               bool // Valid is true if PromoDiscountTarget is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPromoDiscountTarget) Scan(value interface{}) error {
+	if value == nil {
+		ns.PromoDiscountTarget, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PromoDiscountTarget.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPromoDiscountTarget) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PromoDiscountTarget), nil
+}
+
 type ReceivingMethods string
 
 const (
@@ -253,6 +295,8 @@ type PromoCode struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	DeletedAt          pgtype.Timestamptz
+	AppliesToAllRoutes bool
+	DiscountTarget     PromoDiscountTarget
 }
 
 type PromoCodeRedemption struct {
@@ -262,6 +306,16 @@ type PromoCodeRedemption struct {
 	SenderPhone        string
 	DiscountPercentage pgtype.Numeric
 	UsedAt             time.Time
+	DiscountTarget     PromoDiscountTarget
+	DiscountAmount     pgtype.Numeric
+	BonusAmount        pgtype.Numeric
+}
+
+type PromoCodeRoute struct {
+	PromoCodeID        uuid.UUID
+	RouteID            uuid.UUID
+	DiscountTarget     PromoDiscountTarget
+	DiscountPercentage pgtype.Numeric
 }
 
 type Route struct {
