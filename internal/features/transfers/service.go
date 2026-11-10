@@ -488,7 +488,7 @@ func (s *Service) GetByReference(ctx context.Context, reference string) (getTran
 		s.logger.Error("failed to map transfer to dto", "error", err)
 		return getTransferResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
 	}
-		transferDTO.PaymentProofURL = s.paymentProofURL(ctx, transferDTO.PaymentProofKey)
+	transferDTO.PaymentProofURL = s.paymentProofURL(ctx, transferDTO.PaymentProofKey)
 	return transferDTO, nil
 }
 
@@ -533,14 +533,17 @@ func (s *Service) paymentProofURL(ctx context.Context, key *string) *string {
 
 func (s *Service) CreatePaymentProofSignedUrl(ctx context.Context, reference, contentType string) (createPaymentProofSignedUrlResponse, error) {
 	if reference == "" {
+		s.logger.Error("reference is required", "reference", reference)
 		return createPaymentProofSignedUrlResponse{}, fmt.Errorf("%w: reference is required", httpx.BadRequestError)
 	}
 	if !storage.AllowedImageTypes[contentType] && !storage.AllowedDocumentTypes[contentType] {
+		s.logger.Error("content type is not allowed", "content_type", contentType)
 		return createPaymentProofSignedUrlResponse{}, fmt.Errorf("%w: content_type must be image/jpeg, image/jpg, image/png, or application/pdf", httpx.BadRequestError)
 	}
 
 	transfer, err := s.queries.GetTransferByReference(ctx, reference)
 	if err != nil {
+		s.logger.Error("failed to get transfer by reference", "error", err, "reference", reference)
 		return createPaymentProofSignedUrlResponse{}, common.TranslateDBError(err)
 	}
 	if transfer.Status != db.TransferStatusPENDINGPAYMENT {
@@ -550,6 +553,7 @@ func (s *Service) CreatePaymentProofSignedUrl(ctx context.Context, reference, co
 	key := common.GenerateAssetKey("transfers", transfer.Reference, "payment-proof", contentType)
 	signedURL, err := s.objStorage.GetPresignedUrl(ctx, key, contentType)
 	if err != nil {
+		s.logger.Error("failed to get presigned url", "error", err, "key", key)
 		return createPaymentProofSignedUrlResponse{}, fmt.Errorf("%w", httpx.InternalServerError)
 	}
 
@@ -567,11 +571,13 @@ func (s *Service) ConfirmPaymentProof(ctx context.Context, body confirmPaymentPr
 		return common.TranslateDBError(err)
 	}
 	if transfer.Status != db.TransferStatusPENDINGPAYMENT {
+		s.logger.Error("transfer is not pending payment", "transfer_id", transfer.ID, "status", transfer.Status)
 		return fmt.Errorf("%w: transfer is not pending payment", httpx.BadRequestError)
 	}
 
 	prefix := fmt.Sprintf("transfers/%s/payment-proof/", body.Reference)
 	if !strings.HasPrefix(body.Key, prefix) {
+		s.logger.Error("payment proof key is invalid for this transfer", "key", body.Key, "prefix", prefix)
 		return fmt.Errorf("%w: payment proof key is invalid for this transfer", httpx.BadRequestError)
 	}
 
@@ -579,6 +585,7 @@ func (s *Service) ConfirmPaymentProof(ctx context.Context, body confirmPaymentPr
 		if errors.Is(err, storage.ErrObjectNotFound) ||
 			errors.Is(err, storage.ErrObjectTooLarge) ||
 			errors.Is(err, storage.ErrInvalidImageType) {
+			s.logger.Error("failed to validate payment proof", "error", err)
 			return fmt.Errorf("%w: %s", httpx.BadRequestError, err.Error())
 		}
 		s.logger.Error("failed to validate payment proof", "error", err)
@@ -587,17 +594,21 @@ func (s *Service) ConfirmPaymentProof(ctx context.Context, body confirmPaymentPr
 
 	account, err := s.queries.GetPaymentAccountByID(ctx, body.PaymentAccountID)
 	if err != nil {
+		s.logger.Error("failed to get payment account", "error", err, "payment_account_id", body.PaymentAccountID)
 		return common.TranslateDBError(err)
 	}
 	if !account.IsActive {
+		s.logger.Error("payment account is not active", "payment_account_id", body.PaymentAccountID)
 		return fmt.Errorf("%w: payment account is not active", httpx.BadRequestError)
 	}
 	if account.CountryID != transfer.SourceCountryID {
+		s.logger.Error("payment account does not belong to the source country", "payment_account_id", body.PaymentAccountID, "source_country_id", transfer.SourceCountryID)
 		return fmt.Errorf("%w: payment account does not belong to the source country", httpx.BadRequestError)
 	}
 
 	accountNumber, err := paymentAccountSnapshotNumber(account)
 	if err != nil {
+		s.logger.Error("failed to get payment account snapshot number", "error", err, "payment_account_id", body.PaymentAccountID)
 		return err
 	}
 
@@ -611,8 +622,10 @@ func (s *Service) ConfirmPaymentProof(ctx context.Context, body confirmPaymentPr
 		PaymentCurrencyCode:  &account.CurrencyCode,
 		Reference:            body.Reference,
 	}); err != nil {
+		s.logger.Error("failed to set payment proof key", "error", err, "payment_account_id", body.PaymentAccountID)
 		return common.TranslateDBError(err)
 	}
+	s.logger.Info("payment proof confirmed", "transfer_id", transfer.ID, "payment_account_id", body.PaymentAccountID)
 	return nil
 }
 
